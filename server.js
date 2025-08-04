@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3500;
 
 // CORS middleware
 app.use(cors({
-  origin: ['https://manifestcrm-frontend-v2.onrender.com', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174'], 
+  origin: true, 
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With'],
@@ -28,11 +28,8 @@ app.use('/', handleDatabaseError);
 // Global OPTIONS handler as fallback
 app.options('*', (req, res) => {
   const origin = req.headers.origin;
-  const allowedOrigins = ['https://manifestcrm-frontend-v2.onrender.com', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174'];
   
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
+  res.header('Access-Control-Allow-Origin', origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
