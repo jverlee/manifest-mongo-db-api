@@ -1,0 +1,256 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const entityService = require('./services/entityService');
+const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
+const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// CORS middleware
+app.use(cors({
+  origin: ['https://manifestcrm-frontend-v2.onrender.com', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174'], 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With'],
+  optionsSuccessStatus: 200
+}));
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Apply database middleware to all API routes
+app.use('/api', validateDatabaseConnection);
+app.use('/api', handleDatabaseError);
+
+// Global OPTIONS handler as fallback
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = ['https://manifestcrm-frontend-v2.onrender.com', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'http://localhost:5174'];
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
+// =============================================================================
+// MONGODB API ROUTES
+// =============================================================================
+
+// READ operations
+// GET /api/:projectId/entities/:collection - Get all documents
+app.get('/api/:projectId/entities/:collection', async (req, res) => {
+  try {
+    const { projectId, collection } = req.params;
+    const documents = await entityService.getAllDocuments(projectId, collection);
+    
+    res.json(createResponse(documents, documents.length, projectId, collection));
+  } catch (error) {
+    console.error('Error fetching documents:', error);
+    res.status(500).json(errorResponse(error, 'Failed to fetch documents'));
+  }
+});
+
+// GET /api/:projectId/entities/:collection/:id - Get single document
+app.get('/api/:projectId/entities/:collection/:id', async (req, res) => {
+  try {
+    const { projectId, collection, id } = req.params;
+    const document = await entityService.getDocumentById(projectId, collection, id);
+    
+    res.json(createResponse(document, null, projectId, collection));
+  } catch (error) {
+    console.error('Error fetching document:', error);
+    if (error.message.includes('not found')) {
+      res.status(404).json(errorResponse(error, 'Document not found', 404));
+    } else {
+      res.status(500).json(errorResponse(error, 'Failed to fetch document'));
+    }
+  }
+});
+
+// CREATE operations
+// POST /api/:projectId/entities/:collection - Create single document
+app.post('/api/:projectId/entities/:collection', async (req, res) => {
+  try {
+    const { projectId, collection } = req.params;
+    const documentData = req.body;
+    
+    if (!documentData || Object.keys(documentData).length === 0) {
+      return res.status(400).json(errorResponse(
+        'Invalid request body',
+        'Request body is required and cannot be empty',
+        400
+      ));
+    }
+    
+    const createdDocument = await entityService.createDocument(projectId, collection, documentData);
+    
+    res.status(201).json(createResponse(createdDocument, null, projectId, collection));
+  } catch (error) {
+    console.error('Error creating document:', error);
+    res.status(500).json(errorResponse(error, 'Failed to create document'));
+  }
+});
+
+// POST /api/:projectId/entities/:collection/bulk - Create multiple documents
+app.post('/api/:projectId/entities/:collection/bulk', async (req, res) => {
+  try {
+    const { projectId, collection } = req.params;
+    const { documents } = req.body;
+    
+    if (!documents || !Array.isArray(documents) || documents.length === 0) {
+      return res.status(400).json(errorResponse(
+        'Invalid request body',
+        'Request body must contain a "documents" array with at least one document',
+        400
+      ));
+    }
+    
+    const results = await entityService.bulkCreateDocuments(projectId, collection, documents);
+    
+    res.status(201).json(bulkResponse(results, projectId, collection));
+  } catch (error) {
+    console.error('Error creating documents:', error);
+    res.status(500).json(errorResponse(error, 'Failed to create documents'));
+  }
+});
+
+// UPDATE operations
+// PUT /api/:projectId/entities/:collection/:id - Update single document
+app.put('/api/:projectId/entities/:collection/:id', async (req, res) => {
+  try {
+    const { projectId, collection, id } = req.params;
+    const updateData = req.body;
+    
+    if (!updateData || Object.keys(updateData).length === 0) {
+      return res.status(400).json(errorResponse(
+        'Invalid request body',
+        'Request body is required and cannot be empty',
+        400
+      ));
+    }
+    
+    const updatedDocument = await entityService.updateDocument(projectId, collection, id, updateData);
+    
+    res.json(createResponse(updatedDocument, null, projectId, collection));
+  } catch (error) {
+    console.error('Error updating document:', error);
+    if (error.message.includes('not found')) {
+      res.status(404).json(errorResponse(error, 'Document not found', 404));
+    } else {
+      res.status(500).json(errorResponse(error, 'Failed to update document'));
+    }
+  }
+});
+
+// PUT /api/:projectId/entities/:collection/bulk - Update multiple documents
+app.put('/api/:projectId/entities/:collection/bulk', async (req, res) => {
+  try {
+    const { projectId, collection } = req.params;
+    const { updates } = req.body;
+    
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json(errorResponse(
+        'Invalid request body',
+        'Request body must contain an "updates" array with at least one update object containing "id" and update data',
+        400
+      ));
+    }
+    
+    // Validate that each update has an id
+    const invalidUpdates = updates.filter(update => !update.id);
+    if (invalidUpdates.length > 0) {
+      return res.status(400).json(errorResponse(
+        'Invalid update objects',
+        'Each update object must contain an "id" field',
+        400
+      ));
+    }
+    
+    const results = await entityService.bulkUpdateDocuments(projectId, collection, updates);
+    
+    res.json(bulkResponse(results, projectId, collection));
+  } catch (error) {
+    console.error('Error updating documents:', error);
+    res.status(500).json(errorResponse(error, 'Failed to update documents'));
+  }
+});
+
+// DELETE operations
+// DELETE /api/:projectId/entities/:collection/:id - Delete single document
+app.delete('/api/:projectId/entities/:collection/:id', async (req, res) => {
+  try {
+    const { projectId, collection, id } = req.params;
+    const deletedDocument = await entityService.deleteDocument(projectId, collection, id);
+    
+    res.json(createResponse(deletedDocument, null, projectId, collection));
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    if (error.message.includes('not found')) {
+      res.status(404).json(errorResponse(error, 'Document not found', 404));
+    } else {
+      res.status(500).json(errorResponse(error, 'Failed to delete document'));
+    }
+  }
+});
+
+// DELETE /api/:projectId/entities/:collection/bulk - Delete multiple documents
+app.delete('/api/:projectId/entities/:collection/bulk', async (req, res) => {
+  try {
+    const { projectId, collection } = req.params;
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json(errorResponse(
+        'Invalid request body',
+        'Request body must contain an "ids" array with at least one document ID',
+        400
+      ));
+    }
+    
+    const results = await entityService.bulkDeleteDocuments(projectId, collection, ids);
+    
+    res.json(bulkResponse(results, projectId, collection));
+  } catch (error) {
+    console.error('Error deleting documents:', error);
+    res.status(500).json(errorResponse(error, 'Failed to delete documents'));
+  }
+});
+
+// =============================================================================
+// HEALTH CHECK AND ROOT ENDPOINTS
+// =============================================================================
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'MongoDB API Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'MongoDB API Server',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      api: '/api/:projectId/entities/:collection'
+    }
+  });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`MongoDB API Server is running on port ${PORT}`);
+  console.log(`Health check available at: http://localhost:${PORT}/health`);
+  console.log(`API endpoints available at: http://localhost:${PORT}/api/{projectId}/entities/{collection}`);
+});
