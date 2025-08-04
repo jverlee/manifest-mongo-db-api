@@ -22,8 +22,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Apply database middleware to all API routes
-app.use('/api', validateDatabaseConnection);
-app.use('/api', handleDatabaseError);
+app.use('/', validateDatabaseConnection);
+app.use('/', handleDatabaseError);
 
 // Global OPTIONS handler as fallback
 app.options('*', (req, res) => {
@@ -44,8 +44,8 @@ app.options('*', (req, res) => {
 // =============================================================================
 
 // READ operations
-// GET /api/:projectId/entities/:collection - Get all documents
-app.get('/api/:projectId/entities/:collection', async (req, res) => {
+// GET /:projectId/entities/:collection - Get all documents
+app.get('/:projectId/entities/:collection', async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const documents = await entityService.getAllDocuments(projectId, collection);
@@ -57,8 +57,8 @@ app.get('/api/:projectId/entities/:collection', async (req, res) => {
   }
 });
 
-// GET /api/:projectId/entities/:collection/:id - Get single document
-app.get('/api/:projectId/entities/:collection/:id', async (req, res) => {
+// GET /:projectId/entities/:collection/:id - Get single document
+app.get('/:projectId/entities/:collection/:id', async (req, res) => {
   try {
     const { projectId, collection, id } = req.params;
     const document = await entityService.getDocumentById(projectId, collection, id);
@@ -75,8 +75,8 @@ app.get('/api/:projectId/entities/:collection/:id', async (req, res) => {
 });
 
 // CREATE operations
-// POST /api/:projectId/entities/:collection - Create single document
-app.post('/api/:projectId/entities/:collection', async (req, res) => {
+// POST /:projectId/entities/:collection - Create single document
+app.post('/:projectId/entities/:collection', async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const documentData = req.body;
@@ -98,8 +98,8 @@ app.post('/api/:projectId/entities/:collection', async (req, res) => {
   }
 });
 
-// POST /api/:projectId/entities/:collection/bulk - Create multiple documents
-app.post('/api/:projectId/entities/:collection/bulk', async (req, res) => {
+// POST /:projectId/entities/:collection/bulk - Create multiple documents
+app.post('/:projectId/entities/:collection/bulk', async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const { documents } = req.body;
@@ -122,8 +122,8 @@ app.post('/api/:projectId/entities/:collection/bulk', async (req, res) => {
 });
 
 // UPDATE operations
-// PUT /api/:projectId/entities/:collection/:id - Update single document
-app.put('/api/:projectId/entities/:collection/:id', async (req, res) => {
+// PUT /:projectId/entities/:collection/:id - Update single document
+app.put('/:projectId/entities/:collection/:id', async (req, res) => {
   try {
     const { projectId, collection, id } = req.params;
     const updateData = req.body;
@@ -149,8 +149,8 @@ app.put('/api/:projectId/entities/:collection/:id', async (req, res) => {
   }
 });
 
-// PUT /api/:projectId/entities/:collection/bulk - Update multiple documents
-app.put('/api/:projectId/entities/:collection/bulk', async (req, res) => {
+// PUT /:projectId/entities/:collection/bulk - Update multiple documents
+app.put('/:projectId/entities/:collection/bulk', async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const { updates } = req.body;
@@ -183,8 +183,8 @@ app.put('/api/:projectId/entities/:collection/bulk', async (req, res) => {
 });
 
 // DELETE operations
-// DELETE /api/:projectId/entities/:collection/:id - Delete single document
-app.delete('/api/:projectId/entities/:collection/:id', async (req, res) => {
+// DELETE /:projectId/entities/:collection/:id - Delete single document
+app.delete('/:projectId/entities/:collection/:id', async (req, res) => {
   try {
     const { projectId, collection, id } = req.params;
     const deletedDocument = await entityService.deleteDocument(projectId, collection, id);
@@ -200,8 +200,8 @@ app.delete('/api/:projectId/entities/:collection/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/:projectId/entities/:collection/bulk - Delete multiple documents
-app.delete('/api/:projectId/entities/:collection/bulk', async (req, res) => {
+// DELETE /:projectId/entities/:collection/bulk - Delete multiple documents
+app.delete('/:projectId/entities/:collection/bulk', async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const { ids } = req.body;
@@ -243,7 +243,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      api: '/api/:projectId/entities/:collection'
+      api: '/:projectId/entities/:collection'
     }
   });
 });
@@ -252,5 +252,5 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`MongoDB API Server is running on port ${PORT}`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
-  console.log(`API endpoints available at: http://localhost:${PORT}/api/{projectId}/entities/{collection}`);
+  console.log(`API endpoints available at: http://localhost:${PORT}/{projectId}/entities/{collection}`);
 });
