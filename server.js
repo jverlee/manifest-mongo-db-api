@@ -1,8 +1,14 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const passport = require('./config/passport');
+const authRoutes = require('./routes/auth');
 const entityService = require('./services/entityService');
+const supabaseService = require('./services/supabaseService');
 const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
+const { requireProjectAccess } = require('./middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
 
 const app = express();
@@ -17,9 +23,37 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Middleware
+// Session middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: true,
+  name: 'connect.sid',
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    dbName: 'sessions',
+    collectionName: 'user_sessions',
+    ttl: 24 * 60 * 60 // 24 hours in seconds
+  }),
+  cookie: {
+    secure: false,
+    httpOnly: false,
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax',
+    domain: 'localhost'
+  }
+}));
+
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Auth routes
+app.use('/auth', authRoutes);
 
 // Apply database middleware to all API routes
 app.use('/', validateDatabaseConnection);
@@ -37,12 +71,35 @@ app.options('*', (req, res) => {
 });
 
 // =============================================================================
+// CONFIG ROUTES
+// =============================================================================
+
+// GET /:projectId/config - Get project configuration from Supabase
+app.get('/:projectId/config', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const config = await supabaseService.getProjectConfig(projectId);
+    
+    res.json(config);
+  } catch (error) {
+    console.error('Error fetching project config:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch project configuration'
+    });
+  }
+});
+
+// =============================================================================
 // MONGODB API ROUTES
 // =============================================================================
 
 // READ operations
 // GET /:projectId/entities/:collection - Get all documents
-app.get('/:projectId/entities/:collection', async (req, res) => {
+app.get('/:projectId/entities/:collection', requireProjectAccess, async (req, res) => {
+  
+  console.log('User:', req.user)
+
   try {
     const { projectId, collection } = req.params;
     const documents = await entityService.getAllDocuments(projectId, collection);
@@ -55,7 +112,7 @@ app.get('/:projectId/entities/:collection', async (req, res) => {
 });
 
 // GET /:projectId/entities/:collection/:id - Get single document
-app.get('/:projectId/entities/:collection/:id', async (req, res) => {
+app.get('/:projectId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
   try {
     const { projectId, collection, id } = req.params;
     const document = await entityService.getDocumentById(projectId, collection, id);
@@ -73,7 +130,7 @@ app.get('/:projectId/entities/:collection/:id', async (req, res) => {
 
 // CREATE operations
 // POST /:projectId/entities/:collection - Create single document
-app.post('/:projectId/entities/:collection', async (req, res) => {
+app.post('/:projectId/entities/:collection', requireProjectAccess, async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const documentData = req.body;
@@ -96,7 +153,7 @@ app.post('/:projectId/entities/:collection', async (req, res) => {
 });
 
 // POST /:projectId/entities/:collection/bulk - Create multiple documents
-app.post('/:projectId/entities/:collection/bulk', async (req, res) => {
+app.post('/:projectId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const { documents } = req.body;
@@ -120,7 +177,7 @@ app.post('/:projectId/entities/:collection/bulk', async (req, res) => {
 
 // UPDATE operations
 // PUT /:projectId/entities/:collection/:id - Update single document
-app.put('/:projectId/entities/:collection/:id', async (req, res) => {
+app.put('/:projectId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
   try {
     const { projectId, collection, id } = req.params;
     const updateData = req.body;
@@ -147,7 +204,7 @@ app.put('/:projectId/entities/:collection/:id', async (req, res) => {
 });
 
 // PUT /:projectId/entities/:collection/bulk - Update multiple documents
-app.put('/:projectId/entities/:collection/bulk', async (req, res) => {
+app.put('/:projectId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const { updates } = req.body;
@@ -181,7 +238,7 @@ app.put('/:projectId/entities/:collection/bulk', async (req, res) => {
 
 // DELETE operations
 // DELETE /:projectId/entities/:collection/:id - Delete single document
-app.delete('/:projectId/entities/:collection/:id', async (req, res) => {
+app.delete('/:projectId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
   try {
     const { projectId, collection, id } = req.params;
     const deletedDocument = await entityService.deleteDocument(projectId, collection, id);
@@ -198,7 +255,7 @@ app.delete('/:projectId/entities/:collection/:id', async (req, res) => {
 });
 
 // DELETE /:projectId/entities/:collection/bulk - Delete multiple documents
-app.delete('/:projectId/entities/:collection/bulk', async (req, res) => {
+app.delete('/:projectId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
   try {
     const { projectId, collection } = req.params;
     const { ids } = req.body;
