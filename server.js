@@ -23,8 +23,10 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Session middleware
+// Session middleware  
 const isProduction = process.env.NODE_ENV === 'production';
+console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
+console.log('SESSION_SECRET length:', process.env.SESSION_SECRET?.length || 'undefined');
 
 // Debug middleware to log all requests
 app.use((req, res, next) => {
@@ -44,7 +46,9 @@ app.use(session({
     mongoUrl: process.env.MONGODB_URI,
     dbName: 'sessions',
     collectionName: 'user_sessions',
-    ttl: 24 * 60 * 60 // 24 hours in seconds
+    ttl: 24 * 60 * 60, // 24 hours in seconds
+    autoRemove: 'native', // Use MongoDB TTL
+    touchAfter: 0 // Always update session
   }),
   cookie: {
     secure: isProduction, // HTTPS only in production
@@ -58,7 +62,9 @@ app.use(session({
 // Debug middleware to log session info after session middleware
 app.use((req, res, next) => {
   console.log('Session ID after middleware:', req.sessionID);
+  console.log('Session exists:', !!req.session);
   console.log('Session data:', JSON.stringify(req.session, null, 2));
+  console.log('Cookie signature valid:', req.sessionID ? 'yes' : 'no/new');
   console.log('Is authenticated:', req.isAuthenticated ? req.isAuthenticated() : 'passport not initialized');
   console.log('User:', req.user);
   console.log('---');
