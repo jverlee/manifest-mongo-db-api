@@ -16,7 +16,7 @@ function requireProjectAccess(req, res, next) {
   // TODO: Add a check to see if the user is authenticated - base this on manifest.config.js scope on what is expected.
 
 
-  const { projectId } = req.params;
+  const { appId } = req.params;
   const user = req.user;
   
   if (!user) {
@@ -27,13 +27,13 @@ function requireProjectAccess(req, res, next) {
     ));
   }
   
-  // Check if user has access to this projectId
+  // Check if user has access to this appId
   // For now, allowing access if user is authenticated
-  // This can be enhanced later with proper project membership checks
-  if (!user.projects?.includes(projectId) && !user.isAdmin) {
+  // This can be enhanced later with proper app membership checks
+  if (!user.projects?.includes(appId) && !user.isAdmin) {
     // Temporarily allow all authenticated users access
-    // TODO: Implement proper project access control based on user.projects array
-    console.warn(`User ${user.id} accessing project ${projectId} - implement proper access control`);
+    // TODO: Implement proper app access control based on user.projects array
+    console.warn(`User ${user.id} accessing app ${appId} - implement proper access control`);
   }
   
   next();

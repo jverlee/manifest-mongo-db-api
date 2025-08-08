@@ -28,7 +28,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
 console.log('SESSION_SECRET length:', process.env.SESSION_SECRET?.length || 'undefined');
 
-app.set('trust proxy', 1); // see next section too
+app.set('trust proxy', 1); // required for sessions to work properly in production
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
@@ -49,12 +49,6 @@ app.use(session({
     domain: isProduction ? undefined : 'localhost' // Remove domain restriction
   }
 }));
-
-// Simple debug for cookies
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url} - Cookie: ${req.headers.cookie || 'none'}`);
-  next();
-});
 
 // Passport middleware
 app.use(passport.initialize());
@@ -86,11 +80,11 @@ app.options('*', (req, res) => {
 // CONFIG ROUTES
 // =============================================================================
 
-// GET /:projectId/config - Get project configuration from Supabase
-app.get('/:projectId/config', async (req, res) => {
+// GET /:appId/config - Get project configuration from Supabase
+app.get('/:appId/config', async (req, res) => {
   try {
-    const { projectId } = req.params;
-    const config = await supabaseService.getProjectConfig(projectId);
+    const { appId } = req.params;
+    const config = await supabaseService.getProjectConfig(appId);
     
     res.json(config);
   } catch (error) {
@@ -107,29 +101,31 @@ app.get('/:projectId/config', async (req, res) => {
 // =============================================================================
 
 // READ operations
-// GET /:projectId/entities/:collection - Get all documents
-app.get('/:projectId/entities/:collection', requireProjectAccess, async (req, res) => {
+// GET /:appId/entities/:collection - Get all documents
+app.get('/:appId/entities/:collection', requireProjectAccess, async (req, res) => {
   
   console.log('User:', req.user)
 
+  // get app config based on req.user.appId
+
   try {
-    const { projectId, collection } = req.params;
-    const documents = await entityService.getAllDocuments(projectId, collection);
+    const { appId, collection } = req.params;
+    const documents = await entityService.getAllDocuments(appId, collection);
     
-    res.json(createResponse(documents, documents.length, projectId, collection));
+    res.json(createResponse(documents, documents.length, appId, collection));
   } catch (error) {
     console.error('Error fetching documents:', error);
     res.status(500).json(errorResponse(error, 'Failed to fetch documents'));
   }
 });
 
-// GET /:projectId/entities/:collection/:id - Get single document
-app.get('/:projectId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
+// GET /:appId/entities/:collection/:id - Get single document
+app.get('/:appId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
   try {
-    const { projectId, collection, id } = req.params;
-    const document = await entityService.getDocumentById(projectId, collection, id);
+    const { appId, collection, id } = req.params;
+    const document = await entityService.getDocumentById(appId, collection, id);
     
-    res.json(createResponse(document, null, projectId, collection));
+    res.json(createResponse(document, null, appId, collection));
   } catch (error) {
     console.error('Error fetching document:', error);
     if (error.message.includes('not found')) {
@@ -141,10 +137,10 @@ app.get('/:projectId/entities/:collection/:id', requireProjectAccess, async (req
 });
 
 // CREATE operations
-// POST /:projectId/entities/:collection - Create single document
-app.post('/:projectId/entities/:collection', requireProjectAccess, async (req, res) => {
+// POST /:appId/entities/:collection - Create single document
+app.post('/:appId/entities/:collection', requireProjectAccess, async (req, res) => {
   try {
-    const { projectId, collection } = req.params;
+    const { appId, collection } = req.params;
     const documentData = req.body;
     
     if (!documentData || Object.keys(documentData).length === 0) {
@@ -155,19 +151,19 @@ app.post('/:projectId/entities/:collection', requireProjectAccess, async (req, r
       ));
     }
     
-    const createdDocument = await entityService.createDocument(projectId, collection, documentData);
+    const createdDocument = await entityService.createDocument(appId, collection, documentData);
     
-    res.status(201).json(createResponse(createdDocument, null, projectId, collection));
+    res.status(201).json(createResponse(createdDocument, null, appId, collection));
   } catch (error) {
     console.error('Error creating document:', error);
     res.status(500).json(errorResponse(error, 'Failed to create document'));
   }
 });
 
-// POST /:projectId/entities/:collection/bulk - Create multiple documents
-app.post('/:projectId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
+// POST /:appId/entities/:collection/bulk - Create multiple documents
+app.post('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
   try {
-    const { projectId, collection } = req.params;
+    const { appId, collection } = req.params;
     const { documents } = req.body;
     
     if (!documents || !Array.isArray(documents) || documents.length === 0) {
@@ -178,9 +174,9 @@ app.post('/:projectId/entities/:collection/bulk', requireProjectAccess, async (r
       ));
     }
     
-    const results = await entityService.bulkCreateDocuments(projectId, collection, documents);
+    const results = await entityService.bulkCreateDocuments(appId, collection, documents);
     
-    res.status(201).json(bulkResponse(results, projectId, collection));
+    res.status(201).json(bulkResponse(results, appId, collection));
   } catch (error) {
     console.error('Error creating documents:', error);
     res.status(500).json(errorResponse(error, 'Failed to create documents'));
@@ -188,10 +184,10 @@ app.post('/:projectId/entities/:collection/bulk', requireProjectAccess, async (r
 });
 
 // UPDATE operations
-// PUT /:projectId/entities/:collection/:id - Update single document
-app.put('/:projectId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
+// PUT /:appId/entities/:collection/:id - Update single document
+app.put('/:appId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
   try {
-    const { projectId, collection, id } = req.params;
+    const { appId, collection, id } = req.params;
     const updateData = req.body;
     
     if (!updateData || Object.keys(updateData).length === 0) {
@@ -202,9 +198,9 @@ app.put('/:projectId/entities/:collection/:id', requireProjectAccess, async (req
       ));
     }
     
-    const updatedDocument = await entityService.updateDocument(projectId, collection, id, updateData);
+    const updatedDocument = await entityService.updateDocument(appId, collection, id, updateData);
     
-    res.json(createResponse(updatedDocument, null, projectId, collection));
+    res.json(createResponse(updatedDocument, null, appId, collection));
   } catch (error) {
     console.error('Error updating document:', error);
     if (error.message.includes('not found')) {
@@ -215,10 +211,10 @@ app.put('/:projectId/entities/:collection/:id', requireProjectAccess, async (req
   }
 });
 
-// PUT /:projectId/entities/:collection/bulk - Update multiple documents
-app.put('/:projectId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
+// PUT /:appId/entities/:collection/bulk - Update multiple documents
+app.put('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
   try {
-    const { projectId, collection } = req.params;
+    const { appId, collection } = req.params;
     const { updates } = req.body;
     
     if (!updates || !Array.isArray(updates) || updates.length === 0) {
@@ -239,9 +235,9 @@ app.put('/:projectId/entities/:collection/bulk', requireProjectAccess, async (re
       ));
     }
     
-    const results = await entityService.bulkUpdateDocuments(projectId, collection, updates);
+    const results = await entityService.bulkUpdateDocuments(appId, collection, updates);
     
-    res.json(bulkResponse(results, projectId, collection));
+    res.json(bulkResponse(results, appId, collection));
   } catch (error) {
     console.error('Error updating documents:', error);
     res.status(500).json(errorResponse(error, 'Failed to update documents'));
@@ -249,13 +245,13 @@ app.put('/:projectId/entities/:collection/bulk', requireProjectAccess, async (re
 });
 
 // DELETE operations
-// DELETE /:projectId/entities/:collection/:id - Delete single document
-app.delete('/:projectId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
+// DELETE /:appId/entities/:collection/:id - Delete single document
+app.delete('/:appId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
   try {
-    const { projectId, collection, id } = req.params;
-    const deletedDocument = await entityService.deleteDocument(projectId, collection, id);
+    const { appId, collection, id } = req.params;
+    const deletedDocument = await entityService.deleteDocument(appId, collection, id);
     
-    res.json(createResponse(deletedDocument, null, projectId, collection));
+    res.json(createResponse(deletedDocument, null, appId, collection));
   } catch (error) {
     console.error('Error deleting document:', error);
     if (error.message.includes('not found')) {
@@ -266,10 +262,10 @@ app.delete('/:projectId/entities/:collection/:id', requireProjectAccess, async (
   }
 });
 
-// DELETE /:projectId/entities/:collection/bulk - Delete multiple documents
-app.delete('/:projectId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
+// DELETE /:appId/entities/:collection/bulk - Delete multiple documents
+app.delete('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
   try {
-    const { projectId, collection } = req.params;
+    const { appId, collection } = req.params;
     const { ids } = req.body;
     
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -280,9 +276,9 @@ app.delete('/:projectId/entities/:collection/bulk', requireProjectAccess, async 
       ));
     }
     
-    const results = await entityService.bulkDeleteDocuments(projectId, collection, ids);
+    const results = await entityService.bulkDeleteDocuments(appId, collection, ids);
     
-    res.json(bulkResponse(results, projectId, collection));
+    res.json(bulkResponse(results, appId, collection));
   } catch (error) {
     console.error('Error deleting documents:', error);
     res.status(500).json(errorResponse(error, 'Failed to delete documents'));
@@ -309,7 +305,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      api: '/:projectId/entities/:collection'
+      api: '/:appId/entities/:collection'
     }
   });
 });
@@ -318,5 +314,5 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`MongoDB API Server is running on port ${PORT}`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
-  console.log(`API endpoints available at: http://localhost:${PORT}/{projectId}/entities/{collection}`);
+  console.log(`API endpoints available at: http://localhost:${PORT}/{appId}/entities/{collection}`);
 });

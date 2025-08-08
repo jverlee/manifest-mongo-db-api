@@ -17,7 +17,7 @@ function errorResponse(error, message = 'Operation failed', statusCode = 500) {
   };
 }
 
-function createResponse(data, count = null, projectId = null, collection = null) {
+function createResponse(data, count = null, appId = null, collection = null) {
   const response = {
     success: true,
     message: 'Operation completed successfully',
@@ -25,20 +25,20 @@ function createResponse(data, count = null, projectId = null, collection = null)
   };
   
   if (count !== null) response.count = count;
-  if (projectId) response.projectId = projectId;
+  if (appId) response.appId = appId;
   if (collection) response.collection = collection;
   
   return response;
 }
 
-function bulkResponse(results, projectId, collection) {
+function bulkResponse(results, appId, collection) {
   const successCount = results.filter(r => r.success).length;
   const errorCount = results.length - successCount;
   
   return {
     success: true,
     message: `Bulk operation completed. ${successCount} successful, ${errorCount} failed.`,
-    projectId,
+    appId,
     collection,
     total: results.length,
     successful: successCount,

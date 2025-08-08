@@ -5,29 +5,29 @@ class EntityService {
   constructor() {}
 
   // READ operations
-  async getAllDocuments(projectId, collection) {
-    const collectionRef = getCollection(projectId, collection);
+  async getAllDocuments(appId, collection) {
+    const collectionRef = getCollection(appId, collection);
     const documents = await collectionRef.find({}).toArray();
     
-    console.log(`Retrieved ${documents.length} documents from database '${projectId}', collection '${collection}'`);
+    console.log(`Retrieved ${documents.length} documents from database '${appId}', collection '${collection}'`);
     return documents;
   }
 
-  async getDocumentById(projectId, collection, id) {
-    const collectionRef = getCollection(projectId, collection);
+  async getDocumentById(appId, collection, id) {
+    const collectionRef = getCollection(appId, collection);
     const document = await collectionRef.findOne({ _id: new ObjectId(id) });
     
     if (!document) {
       throw new Error(`Document with id ${id} not found`);
     }
     
-    console.log(`Retrieved document ${id} from database '${projectId}', collection '${collection}'`);
+    console.log(`Retrieved document ${id} from database '${appId}', collection '${collection}'`);
     return document;
   }
 
   // CREATE operations
-  async createDocument(projectId, collection, documentData) {
-    const collectionRef = getCollection(projectId, collection);
+  async createDocument(appId, collection, documentData) {
+    const collectionRef = getCollection(appId, collection);
     
     // Add timestamp if not provided
     if (!documentData.createdAt) {
@@ -39,15 +39,15 @@ class EntityService {
     
     const result = await collectionRef.insertOne(documentData);
     
-    console.log(`Created document ${result.insertedId} in database '${projectId}', collection '${collection}'`);
+    console.log(`Created document ${result.insertedId} in database '${appId}', collection '${collection}'`);
     return {
       _id: result.insertedId,
       ...documentData
     };
   }
 
-  async createManyDocuments(projectId, collection, documentsData) {
-    const collectionRef = getCollection(projectId, collection);
+  async createManyDocuments(appId, collection, documentsData) {
+    const collectionRef = getCollection(appId, collection);
     
     // Add timestamps to all documents
     const documentsWithTimestamps = documentsData.map(doc => ({
@@ -58,7 +58,7 @@ class EntityService {
     
     const result = await collectionRef.insertMany(documentsWithTimestamps);
     
-    console.log(`Created ${result.insertedIds.length} documents in database '${projectId}', collection '${collection}'`);
+    console.log(`Created ${result.insertedIds.length} documents in database '${appId}', collection '${collection}'`);
     return {
       insertedIds: Object.values(result.insertedIds),
       insertedCount: result.insertedCount
@@ -66,8 +66,8 @@ class EntityService {
   }
 
   // UPDATE operations
-  async updateDocument(projectId, collection, id, updateData) {
-    const collectionRef = getCollection(projectId, collection);
+  async updateDocument(appId, collection, id, updateData) {
+    const collectionRef = getCollection(appId, collection);
     
     // Add updated timestamp
     updateData.updatedAt = new Date();
@@ -86,7 +86,7 @@ class EntityService {
       );
       
       if (result.value) {
-        console.log(`Updated document ${id} in database '${projectId}', collection '${collection}'`);
+        console.log(`Updated document ${id} in database '${appId}', collection '${collection}'`);
         return result.value;
       }
     } catch (error) {
@@ -113,12 +113,12 @@ class EntityService {
       throw new Error(`Document with id ${id} not found after update`);
     }
     
-    console.log(`Updated document ${id} in database '${projectId}', collection '${collection}'`);
+    console.log(`Updated document ${id} in database '${appId}', collection '${collection}'`);
     return updatedDoc;
   }
 
-  async updateManyDocuments(projectId, collection, filter, updateData) {
-    const collectionRef = getCollection(projectId, collection);
+  async updateManyDocuments(appId, collection, filter, updateData) {
+    const collectionRef = getCollection(appId, collection);
     
     // Add updated timestamp
     updateData.updatedAt = new Date();
@@ -133,7 +133,7 @@ class EntityService {
       { $set: updateData }
     );
     
-    console.log(`Updated ${result.modifiedCount} documents in database '${projectId}', collection '${collection}'`);
+    console.log(`Updated ${result.modifiedCount} documents in database '${appId}', collection '${collection}'`);
     return {
       matchedCount: result.matchedCount,
       modifiedCount: result.modifiedCount
@@ -141,8 +141,8 @@ class EntityService {
   }
 
   // DELETE operations
-  async deleteDocument(projectId, collection, id) {
-    const collectionRef = getCollection(projectId, collection);
+  async deleteDocument(appId, collection, id) {
+    const collectionRef = getCollection(appId, collection);
     
     const result = await collectionRef.findOneAndDelete({ _id: new ObjectId(id) });
     
@@ -150,28 +150,28 @@ class EntityService {
       throw new Error(`Document with id ${id} not found`);
     }
     
-    console.log(`Deleted document ${id} from database '${projectId}', collection '${collection}'`);
+    console.log(`Deleted document ${id} from database '${appId}', collection '${collection}'`);
     return result.value;
   }
 
-  async deleteManyDocuments(projectId, collection, filter) {
-    const collectionRef = getCollection(projectId, collection);
+  async deleteManyDocuments(appId, collection, filter) {
+    const collectionRef = getCollection(appId, collection);
     
     const result = await collectionRef.deleteMany(filter);
     
-    console.log(`Deleted ${result.deletedCount} documents from database '${projectId}', collection '${collection}'`);
+    console.log(`Deleted ${result.deletedCount} documents from database '${appId}', collection '${collection}'`);
     return {
       deletedCount: result.deletedCount
     };
   }
 
   // Bulk operations with individual error handling
-  async bulkCreateDocuments(projectId, collection, documentsData) {
+  async bulkCreateDocuments(appId, collection, documentsData) {
     const results = [];
     
     for (const doc of documentsData) {
       try {
-        const result = await this.createDocument(projectId, collection, doc);
+        const result = await this.createDocument(appId, collection, doc);
         results.push({ success: true, data: result });
       } catch (error) {
         results.push({ success: false, error: error.message, data: doc });
@@ -181,13 +181,13 @@ class EntityService {
     return results;
   }
 
-  async bulkUpdateDocuments(projectId, collection, updates) {
+  async bulkUpdateDocuments(appId, collection, updates) {
     const results = [];
     
     for (const update of updates) {
       try {
         const { id, ...updateData } = update;
-        const result = await this.updateDocument(projectId, collection, id, updateData);
+        const result = await this.updateDocument(appId, collection, id, updateData);
         results.push({ success: true, data: result });
       } catch (error) {
         results.push({ success: false, error: error.message, data: update });
@@ -197,12 +197,12 @@ class EntityService {
     return results;
   }
 
-  async bulkDeleteDocuments(projectId, collection, ids) {
+  async bulkDeleteDocuments(appId, collection, ids) {
     const results = [];
     
     for (const id of ids) {
       try {
-        const result = await this.deleteDocument(projectId, collection, id);
+        const result = await this.deleteDocument(appId, collection, id);
         results.push({ success: true, data: result });
       } catch (error) {
         results.push({ success: false, error: error.message, id });
