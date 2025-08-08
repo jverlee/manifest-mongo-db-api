@@ -27,12 +27,12 @@ router.get('/google', async (req, res, next) => {
     });
   }
 
-  // Store appId and redirectUrl in session
-  req.session.appId = appId;
-  req.session.redirectUrl = redirectUrl;
+  // Create state parameter with appId and redirectUrl
+  const state = Buffer.from(JSON.stringify({ appId, redirectUrl })).toString('base64');
   
   passport.authenticate('google', {
-    scope: ['profile', 'email']
+    scope: ['profile', 'email'],
+    state: state
   })(req, res, next);
 });
 
@@ -43,9 +43,27 @@ router.get('/google/callback',
   (req, res) => {
     console.log('OAuth callback - req.user:', req.user);
     console.log('OAuth callback - req.isAuthenticated():', req.isAuthenticated());
-    console.log('OAuth callback - req.session:', req.session);
+    console.log('OAuth callback - req.query.state:', req.query.state);
     
-    const redirectUrl = req.session.redirectUrl || 'http://localhost:3000';
+    let redirectUrl = 'http://localhost:3000';
+    let appId = null;
+    
+    // Decode state parameter to get appId and redirectUrl
+    if (req.query.state) {
+      try {
+        const decoded = JSON.parse(Buffer.from(req.query.state, 'base64').toString());
+        redirectUrl = decoded.redirectUrl || redirectUrl;
+        appId = decoded.appId;
+        
+        // Store appId in user object
+        if (req.user && appId) {
+          req.user.appId = appId;
+        }
+      } catch (error) {
+        console.error('Error decoding state parameter:', error);
+      }
+    }
+    
     res.redirect(`${redirectUrl}/dashboard?auth=success`);
   }
 );
