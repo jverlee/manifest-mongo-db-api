@@ -28,6 +28,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
 console.log('SESSION_SECRET length:', process.env.SESSION_SECRET?.length || 'undefined');
 
+app.set('trust proxy', 1); // see next section too
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
   resave: true,
