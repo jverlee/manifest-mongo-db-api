@@ -16,17 +16,19 @@ router.get('/google', async (req, res, next) => {
   
   const { appId } = req.query;
 
-  console.log('appId', appId);
+  // get config for appId
+  const config = await supabaseService.getProjectConfig(appId);
 
-  try {
-    // get app config
-    const config = await supabaseService.getProjectConfig(appId);
-    req.session.appConfig = config;
-    req.session.appId = appId;
-  } catch (error) {
-    console.error('Error fetching app config:', error);
-    return res.status(500).json({ error: 'Failed to fetch app configuration' });
+  // if config.monetization.type is not 'login_required', return error
+  if (config.monetization.type !== 'login_required') {
+    return res.status(403).json({
+      success: false,
+      message: 'This app is not configured to allow login'
+    });
   }
+
+  // Store appId in session
+  req.session.appId = appId;
   
   passport.authenticate('google', {
     scope: ['profile', 'email']
@@ -47,12 +49,7 @@ router.get('/google/callback',
 
 router.get('/user', (req, res) => {
   if (req.isAuthenticated()) {
-    const { details, ...user } = req.user;
-    res.json({
-      success: true,
-      user,
-      details
-    });
+    res.json(req.user);
   } else {
     res.status(401).json({
       success: false,

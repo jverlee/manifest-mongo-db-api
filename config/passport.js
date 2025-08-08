@@ -1,6 +1,5 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const userService = require('../services/userService');
 
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
@@ -9,26 +8,18 @@ passport.use(new GoogleStrategy({
   passReqToCallback: true
 }, async (req, accessToken, refreshToken, profile, done) => {
   try {
-    const baseUser = {
+    const user = {
       id: profile.id,
       email: profile.emails[0].value,
       name: profile.displayName,
       avatar: profile.photos[0].value,
       provider: 'google',
       accessToken,
-      refreshToken
+      refreshToken,
+      appId: req.session?.appId
     };
     
-    const userDetails = await userService.getUserDetails(baseUser.id, baseUser.email, req.session?.appConfig);
-    
-    const enrichedUser = {
-      ...baseUser,
-      details: userDetails,
-      appId: req.session?.appId,
-      config: req.session?.appConfig
-    };
-    
-    return done(null, enrichedUser);
+    return done(null, user);
   } catch (error) {
     return done(error, null);
   }
