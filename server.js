@@ -39,7 +39,7 @@ app.use((req, res, next) => {
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-  resave: false,
+  resave: true,
   saveUninitialized: false, // Don't create session until something is stored
   name: 'connect.sid',
   store: MongoStore.create({
@@ -49,6 +49,8 @@ app.use(session({
     ttl: 24 * 60 * 60, // 24 hours in seconds
     autoRemove: 'native', // Use MongoDB TTL
     touchAfter: 0 // Always update session
+  }).on('error', (err) => {
+    console.error('Session store error:', err);
   }),
   cookie: {
     secure: isProduction, // HTTPS only in production
