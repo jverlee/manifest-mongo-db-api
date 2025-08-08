@@ -14,7 +14,7 @@ router.get('/debug', (req, res) => {
 
 router.get('/google', async (req, res, next) => {
   
-  const { appId } = req.query;
+  const { appId, redirectUrl } = req.query;
 
   // get config for appId
   const config = await supabaseService.getProjectConfig(appId);
@@ -27,8 +27,9 @@ router.get('/google', async (req, res, next) => {
     });
   }
 
-  // Store appId in session
+  // Store appId and redirectUrl in session
   req.session.appId = appId;
+  req.session.redirectUrl = redirectUrl;
   
   passport.authenticate('google', {
     scope: ['profile', 'email']
@@ -37,13 +38,15 @@ router.get('/google', async (req, res, next) => {
 
 router.get('/google/callback',
   passport.authenticate('google', { 
-    failureRedirect: process.env.CLIENT_URL || 'http://localhost:3000/login?error=auth_failed'
+    failureRedirect: 'http://localhost:3000/login?error=auth_failed'
   }),
   (req, res) => {
     console.log('OAuth callback - req.user:', req.user);
     console.log('OAuth callback - req.isAuthenticated():', req.isAuthenticated());
     console.log('OAuth callback - req.session:', req.session);
-    res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/dashboard?auth=success`);
+    
+    const redirectUrl = req.session.redirectUrl || 'http://localhost:3000';
+    res.redirect(`${redirectUrl}/dashboard?auth=success`);
   }
 );
 
