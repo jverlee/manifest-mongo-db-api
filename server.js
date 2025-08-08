@@ -24,6 +24,8 @@ app.use(cors({
 }));
 
 // Session middleware
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
   resave: false,
@@ -36,11 +38,11 @@ app.use(session({
     ttl: 24 * 60 * 60 // 24 hours in seconds
   }),
   cookie: {
-    secure: false,
-    httpOnly: false,
+    secure: isProduction, // HTTPS only in production
+    httpOnly: true, // Prevent XSS attacks
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax',
-    domain: 'localhost'
+    sameSite: isProduction ? 'none' : 'lax', // Cross-site cookies in production
+    domain: isProduction ? '.madewithmanifest.com' : 'localhost' // Allow subdomains in production
   }
 }));
 
