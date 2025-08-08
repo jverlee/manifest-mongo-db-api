@@ -26,6 +26,15 @@ app.use(cors({
 // Session middleware
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Cookies:', req.headers.cookie);
+  console.log('Session ID before middleware:', req.sessionID);
+  next();
+});
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
   resave: false,
@@ -45,6 +54,16 @@ app.use(session({
     domain: isProduction ? '.madewithmanifest.com' : 'localhost' // Share cookies across madewithmanifest.com subdomains
   }
 }));
+
+// Debug middleware to log session info after session middleware
+app.use((req, res, next) => {
+  console.log('Session ID after middleware:', req.sessionID);
+  console.log('Session data:', JSON.stringify(req.session, null, 2));
+  console.log('Is authenticated:', req.isAuthenticated ? req.isAuthenticated() : 'passport not initialized');
+  console.log('User:', req.user);
+  console.log('---');
+  next();
+});
 
 // Passport middleware
 app.use(passport.initialize());
