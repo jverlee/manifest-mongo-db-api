@@ -39,10 +39,10 @@ app.use(session({
   }),
   cookie: {
     secure: isProduction, // HTTPS only in production
-    httpOnly: true, // Prevent XSS attacks
+    httpOnly: false, // Allow frontend JS access for cross-origin scenarios
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: isProduction ? 'none' : 'lax', // Cross-site cookies in production
-    domain: isProduction ? '.madewithmanifest.com' : 'localhost' // Allow subdomains in production
+    domain: isProduction ? undefined : 'localhost' // No domain restriction in production for cross-origin
   }
 }));
 
