@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false, // Don't create session until something is stored
   name: 'connect.sid',
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
