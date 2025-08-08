@@ -106,10 +106,31 @@ app.get('/:appId/entities/:collection', requireProjectAccess, async (req, res) =
   
   console.log('User:', req.user)
 
-  // get app config based on req.user.appId
-
   try {
     const { appId, collection } = req.params;
+    
+    // Get app config based on :appId
+    const appConfig = await supabaseService.getProjectConfig(appId);
+    
+    // Check monetization requirements
+    if (appConfig.monetization?.type === 'login_required') {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json(errorResponse(
+          'Authentication required',
+          'This app requires user authentication',
+          401
+        ));
+      }
+      
+      if (req.user.appId !== appId) {
+        return res.status(403).json(errorResponse(
+          'Access forbidden',
+          'User does not have access to this app',
+          403
+        ));
+      }
+    }
+    
     const documents = await entityService.getAllDocuments(appId, collection);
     
     res.json(createResponse(documents, documents.length, appId, collection));
