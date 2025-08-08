@@ -8,7 +8,7 @@ const authRoutes = require('./routes/auth');
 const entityService = require('./services/entityService');
 const supabaseService = require('./services/supabaseService');
 const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
-const { requireProjectAccess } = require('./middleware/authMiddleware');
+const { validateAccess } = require('./middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
 
 const app = express();
@@ -102,35 +102,12 @@ app.get('/:appId/config', async (req, res) => {
 
 // READ operations
 // GET /:appId/entities/:collection - Get all documents
-app.get('/:appId/entities/:collection', requireProjectAccess, async (req, res) => {
+app.get('/:appId/entities/:collection', validateAccess, async (req, res) => {
   
   console.log('User:', req.user)
 
   try {
     const { appId, collection } = req.params;
-    
-    // Get app config based on :appId
-    const appConfig = await supabaseService.getProjectConfig(appId);
-    
-    // Check monetization requirements
-    if (appConfig.monetization?.type === 'login_required') {
-      if (!req.user || !req.user.id) {
-        return res.status(401).json(errorResponse(
-          'Authentication required',
-          'This app requires user authentication',
-          401
-        ));
-      }
-      
-      if (req.user.appId !== appId) {
-        return res.status(403).json(errorResponse(
-          'Access forbidden',
-          'User does not have access to this app',
-          403
-        ));
-      }
-    }
-    
     const documents = await entityService.getAllDocuments(appId, collection);
     
     res.json(createResponse(documents, documents.length, appId, collection));
@@ -141,7 +118,7 @@ app.get('/:appId/entities/:collection', requireProjectAccess, async (req, res) =
 });
 
 // GET /:appId/entities/:collection/:id - Get single document
-app.get('/:appId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
+app.get('/:appId/entities/:collection/:id', validateAccess, async (req, res) => {
   try {
     const { appId, collection, id } = req.params;
     const document = await entityService.getDocumentById(appId, collection, id);
@@ -159,7 +136,7 @@ app.get('/:appId/entities/:collection/:id', requireProjectAccess, async (req, re
 
 // CREATE operations
 // POST /:appId/entities/:collection - Create single document
-app.post('/:appId/entities/:collection', requireProjectAccess, async (req, res) => {
+app.post('/:appId/entities/:collection', validateAccess, async (req, res) => {
   try {
     const { appId, collection } = req.params;
     const documentData = req.body;
@@ -182,7 +159,7 @@ app.post('/:appId/entities/:collection', requireProjectAccess, async (req, res) 
 });
 
 // POST /:appId/entities/:collection/bulk - Create multiple documents
-app.post('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
+app.post('/:appId/entities/:collection/bulk', validateAccess, async (req, res) => {
   try {
     const { appId, collection } = req.params;
     const { documents } = req.body;
@@ -206,7 +183,7 @@ app.post('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, 
 
 // UPDATE operations
 // PUT /:appId/entities/:collection/:id - Update single document
-app.put('/:appId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
+app.put('/:appId/entities/:collection/:id', validateAccess, async (req, res) => {
   try {
     const { appId, collection, id } = req.params;
     const updateData = req.body;
@@ -233,7 +210,7 @@ app.put('/:appId/entities/:collection/:id', requireProjectAccess, async (req, re
 });
 
 // PUT /:appId/entities/:collection/bulk - Update multiple documents
-app.put('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
+app.put('/:appId/entities/:collection/bulk', validateAccess, async (req, res) => {
   try {
     const { appId, collection } = req.params;
     const { updates } = req.body;
@@ -267,7 +244,7 @@ app.put('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, r
 
 // DELETE operations
 // DELETE /:appId/entities/:collection/:id - Delete single document
-app.delete('/:appId/entities/:collection/:id', requireProjectAccess, async (req, res) => {
+app.delete('/:appId/entities/:collection/:id', validateAccess, async (req, res) => {
   try {
     const { appId, collection, id } = req.params;
     const deletedDocument = await entityService.deleteDocument(appId, collection, id);
@@ -284,7 +261,7 @@ app.delete('/:appId/entities/:collection/:id', requireProjectAccess, async (req,
 });
 
 // DELETE /:appId/entities/:collection/bulk - Delete multiple documents
-app.delete('/:appId/entities/:collection/bulk', requireProjectAccess, async (req, res) => {
+app.delete('/:appId/entities/:collection/bulk', validateAccess, async (req, res) => {
   try {
     const { appId, collection } = req.params;
     const { ids } = req.body;

@@ -1,4 +1,5 @@
 const { errorResponse } = require('../utils/responseUtils');
+const supabaseService = require('../services/supabaseService');
 
 function requireAuth(req, res, next) {
   if (!req.user) {
@@ -11,35 +12,40 @@ function requireAuth(req, res, next) {
   next();
 }
 
-function requireProjectAccess(req, res, next) {
-
-  // TODO: Add a check to see if the user is authenticated - base this on manifest.config.js scope on what is expected.
-
-
-  const { appId } = req.params;
-  const user = req.user;
-  
-  if (!user) {
-    return res.status(401).json(errorResponse(
-      'Authentication required',
-      'User must be authenticated to access this resource',
-      401
-    ));
+async function validateAccess(req, res, next) {
+  try {
+    const { appId } = req.params;
+    
+    // Get app config based on :appId
+    const appConfig = await supabaseService.getProjectConfig(appId);
+    
+    // Check monetization requirements
+    if (appConfig.monetization?.type === 'login_required') {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json(errorResponse(
+          'Authentication required',
+          'This app requires user authentication',
+          401
+        ));
+      }
+      
+      if (req.user.appId !== appId) {
+        return res.status(403).json(errorResponse(
+          'Access forbidden',
+          'User does not have access to this app',
+          403
+        ));
+      }
+    }
+    
+    next();
+  } catch (error) {
+    console.error('Error in requireProjectAccess middleware:', error);
+    return res.status(500).json(errorResponse(error, 'Failed to verify project access'));
   }
-  
-  // Check if user has access to this appId
-  // For now, allowing access if user is authenticated
-  // This can be enhanced later with proper app membership checks
-  if (!user.projects?.includes(appId) && !user.isAdmin) {
-    // Temporarily allow all authenticated users access
-    // TODO: Implement proper app access control based on user.projects array
-    console.warn(`User ${user.id} accessing app ${appId} - implement proper access control`);
-  }
-  
-  next();
 }
 
 module.exports = {
   requireAuth,
-  requireProjectAccess
+  validateAccess
 };
