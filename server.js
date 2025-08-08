@@ -28,48 +28,29 @@ const isProduction = process.env.NODE_ENV === 'production';
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
 console.log('SESSION_SECRET length:', process.env.SESSION_SECRET?.length || 'undefined');
 
-// Debug middleware to log all requests
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('Cookies:', req.headers.cookie);
-  console.log('Session ID before middleware:', req.sessionID);
-  next();
-});
-
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
   resave: true,
-  saveUninitialized: true, // Create session for authenticated users
+  saveUninitialized: true,
   name: 'connect.sid',
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
     dbName: 'sessions',
     collectionName: 'user_sessions',
-    ttl: 24 * 60 * 60, // 24 hours in seconds
-    autoRemove: 'native', // Use MongoDB TTL
-    touchAfter: 0 // Always update session
-  }).on('error', (err) => {
-    console.error('Session store error:', err);
+    ttl: 24 * 60 * 60
   }),
   cookie: {
-    secure: isProduction, // HTTPS only in production
-    httpOnly: true, // Keep secure - browser handles cookie automatically
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: isProduction ? 'lax' : 'lax', // Same-site for subdomains
-    domain: isProduction ? '.madewithmanifest.com' : 'localhost' // Share cookies across madewithmanifest.com subdomains
+    secure: isProduction,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: isProduction ? 'none' : 'lax', // Change back to 'none' for cross-site
+    domain: isProduction ? undefined : 'localhost' // Remove domain restriction
   }
 }));
 
-// Debug middleware to log session info after session middleware
+// Simple debug for cookies
 app.use((req, res, next) => {
-  console.log('Session ID after middleware:', req.sessionID);
-  console.log('Session exists:', !!req.session);
-  console.log('Session data:', JSON.stringify(req.session, null, 2));
-  console.log('Cookie signature valid:', req.sessionID ? 'yes' : 'no/new');
-  console.log('Is authenticated:', req.isAuthenticated ? req.isAuthenticated() : 'passport not initialized');
-  console.log('User:', req.user);
-  console.log('---');
+  console.log(`${req.method} ${req.url} - Cookie: ${req.headers.cookie || 'none'}`);
   next();
 });
 
