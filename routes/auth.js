@@ -64,7 +64,7 @@ router.get('/google/callback',
       }
     }
     
-    res.redirect(`${redirectUrl}/dashboard?auth=success`);
+    res.redirect(`${redirectUrl}?login=success`);
   }
 );
 
