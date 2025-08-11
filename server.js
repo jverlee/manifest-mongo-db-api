@@ -81,10 +81,10 @@ app.options('*', (req, res) => {
 // STRIPE ROUTES
 // =============================================================================
 
-// GET /stripe/checkout/:appId - Create a checkout session and redirect to Stripe Checkout
-app.get('/stripe/checkout/:appId', async (req, res) => {
+// GET /stripe/checkout/:appId/prices/:priceId - Create a checkout session and redirect to Stripe Checkout
+app.get('/stripe/checkout/:appId/prices/:priceId', async (req, res) => {
   try {
-    const { appId } = req.params;
+    const { appId, priceId } = req.params;
     
     // Get Stripe account details from Supabase
     const stripeAccount = await supabaseService.getStripeAccount(appId);
@@ -97,24 +97,47 @@ app.get('/stripe/checkout/:appId', async (req, res) => {
       ));
     }
 
-    // Create Stripe checkout session using the connected account's access token
+    // Create Stripe instance for the connected account
     const connectedStripe = require('stripe')(stripeAccount.access_token);
+    
+    // Validate that the price exists and belongs to this app
+    try {
+      const price = await connectedStripe.prices.retrieve(priceId, {
+        expand: ['product']
+      });
+      
+      // Check if the price is active
+      if (!price.active) {
+        return res.status(400).json(errorResponse(
+          'Price not available',
+          'The selected price is not currently active',
+          400
+        ));
+      }
+      
+      // Check if the product belongs to this app
+      if (!price.product.metadata || price.product.metadata.manifest_app_id !== appId) {
+        return res.status(403).json(errorResponse(
+          'Price not accessible',
+          'The selected price does not belong to this app',
+          403
+        ));
+      }
+    } catch (error) {
+      return res.status(404).json(errorResponse(
+        'Price not found',
+        'The specified price does not exist',
+        404
+      ));
+    }
+
+    // Create Stripe checkout session using the price ID
     const session = await connectedStripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'subscription',
       line_items: [
         {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: 'App Subscription',
-              description: 'Monthly subscription to the app'
-            },
-            unit_amount: 1999, // $19.99 per month
-            recurring: {
-              interval: 'month',
-            },
-          },
+          price: priceId,
           quantity: 1,
         },
       ],
