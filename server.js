@@ -55,8 +55,75 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Body parser middleware - webhook endpoint needs raw body BEFORE json parsing
-app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
+// Stripe webhook route MUST be defined BEFORE express.json() middleware
+// to preserve raw body for signature verification
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!endpointSecret) {
+    console.error('STRIPE_WEBHOOK_SECRET not configured');
+    return res.status(500).send('Webhook secret not configured');
+  }
+
+  console.log('Webhook signature:', sig);
+  console.log('Request body type:', typeof req.body);
+  console.log('Request body length:', req.body?.length);
+  console.log('Is Buffer:', Buffer.isBuffer(req.body));
+
+  let event;
+
+  try {
+    // Verify webhook signature using platform Stripe instance
+    // req.body should be a Buffer when using express.raw()
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // For Connect accounts, the event will have an 'account' property
+  const connectedAccountId = event.account;
+  console.log('Received webhook event:', event.type, 'ID:', event.id, 'Account:', connectedAccountId);
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object, connectedAccountId);
+        break;
+
+      case 'customer.subscription.created':
+        await handleSubscriptionCreated(event.data.object, connectedAccountId);
+        break;
+
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(event.data.object, connectedAccountId);
+        break;
+
+      case 'customer.subscription.deleted':
+        await handleSubscriptionDeleted(event.data.object, connectedAccountId);
+        break;
+
+      case 'invoice.payment_succeeded':
+        await handleInvoicePaymentSucceeded(event.data.object, connectedAccountId);
+        break;
+
+      case 'invoice.payment_failed':
+        await handleInvoicePaymentFailed(event.data.object, connectedAccountId);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// Other body parser middleware (AFTER webhook route)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -279,73 +346,6 @@ app.get('/stripe/cancel', async (req, res) => {
     </body>
     </html>
   `);
-});
-
-// POST /stripe/webhook - Handle Stripe webhooks
-app.post('/stripe/webhook', async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!endpointSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET not configured');
-    return res.status(500).send('Webhook secret not configured');
-  }
-
-  console.log('Webhook signature:', sig);
-  console.log('Request body type:', typeof req.body);
-  console.log('Request body length:', req.body?.length);
-
-  let event;
-
-  try {
-    // Verify webhook signature using platform Stripe instance
-    // Note: Use the platform stripe instance (initialized with STRIPE_CLIENT_SECRET)
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    console.error('Raw body:', req.body);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  // For Connect accounts, the event will have an 'account' property
-  const connectedAccountId = event.account;
-  console.log('Received webhook event:', event.type, 'ID:', event.id, 'Account:', connectedAccountId);
-
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object, connectedAccountId);
-        break;
-
-      case 'customer.subscription.created':
-        await handleSubscriptionCreated(event.data.object, connectedAccountId);
-        break;
-
-      case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object, connectedAccountId);
-        break;
-
-      case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object, connectedAccountId);
-        break;
-
-      case 'invoice.payment_succeeded':
-        await handleInvoicePaymentSucceeded(event.data.object, connectedAccountId);
-        break;
-
-      case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event.data.object, connectedAccountId);
-        break;
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`);
-    }
-
-    res.json({ received: true });
-  } catch (error) {
-    console.error('Error processing webhook:', error);
-    res.status(500).json({ error: 'Webhook processing failed' });
-  }
 });
 
 // Webhook handler functions
