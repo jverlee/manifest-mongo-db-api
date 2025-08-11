@@ -55,7 +55,8 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Body parser middleware
+// Body parser middleware (with raw body for webhooks)
+app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -145,8 +146,8 @@ app.get('/stripe/checkout/:appId/prices/:priceId', async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: `${req.protocol}://${req.get('host')}/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel`,
+      success_url: `${req.protocol}://${req.get('host')}/stripe/success?session_id={CHECKOUT_SESSION_ID}&app_id=${appId}`,
+      cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel?app_id=${appId}`,
     });
 
     // Redirect to Stripe Checkout
@@ -199,6 +200,271 @@ app.get('/stripe/portal/:appId', requireAuth, async (req, res) => {
     res.status(500).json(errorResponse(error, 'Failed to create customer portal session'));
   }
 });
+
+// GET /stripe/success - Handle successful payment
+app.get('/stripe/success', async (req, res) => {
+  try {
+    const { session_id, app_id } = req.query;
+    
+    if (!session_id || !app_id) {
+      return res.status(400).json(errorResponse(
+        'Missing parameters',
+        'Session ID and App ID are required',
+        400
+      ));
+    }
+
+    // Get Stripe account for this app
+    const stripeAccount = await supabaseService.getStripeAccount(app_id);
+    if (!stripeAccount) {
+      return res.status(404).json(errorResponse('Stripe account not found', 'No Stripe account configured', 404));
+    }
+
+    // Retrieve session details
+    const connectedStripe = require('stripe')(stripeAccount.access_token);
+    const session = await connectedStripe.checkout.sessions.retrieve(session_id, {
+      expand: ['customer', 'subscription', 'payment_intent', 'line_items']
+    });
+
+    // Extract key information
+    const paymentData = {
+      session_id: session.id,
+      customer_id: session.customer,
+      subscription_id: session.subscription,
+      payment_intent_id: session.payment_intent,
+      mode: session.mode,
+      amount_total: session.amount_total,
+      currency: session.currency,
+      customer_email: session.customer_details?.email,
+      app_id: app_id,
+      created_at: new Date()
+    };
+
+    // TODO: Save this data to your database
+    // Example: await supabaseService.savePaymentData(paymentData);
+    
+    console.log('Payment successful:', paymentData);
+
+    // Show success page or redirect
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Payment Successful</title></head>
+      <body>
+        <h1>Payment Successful!</h1>
+        <p>Thank you for your purchase.</p>
+        <p>Customer ID: ${session.customer}</p>
+        ${session.subscription ? `<p>Subscription ID: ${session.subscription}</p>` : ''}
+        <p><a href="/dashboard">Go to Dashboard</a></p>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error handling payment success:', error);
+    res.status(500).json(errorResponse(error, 'Failed to process successful payment'));
+  }
+});
+
+// GET /stripe/cancel - Handle cancelled payment
+app.get('/stripe/cancel', async (req, res) => {
+  const { app_id } = req.query;
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head><title>Payment Cancelled</title></head>
+    <body>
+      <h1>Payment Cancelled</h1>
+      <p>Your payment was cancelled. No charges were made.</p>
+      <p><a href="/stripe/checkout/${app_id}">Try Again</a></p>
+    </body>
+    </html>
+  `);
+});
+
+// POST /stripe/webhook - Handle Stripe webhooks
+app.post('/stripe/webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!endpointSecret) {
+    console.error('STRIPE_WEBHOOK_SECRET not configured');
+    return res.status(500).send('Webhook secret not configured');
+  }
+
+  let event;
+
+  try {
+    // Verify webhook signature - this ensures the webhook is from Stripe
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // For Connect accounts, the event will have an 'account' property
+  const connectedAccountId = event.account;
+  console.log('Received webhook event:', event.type, 'ID:', event.id, 'Account:', connectedAccountId);
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object, connectedAccountId);
+        break;
+
+      case 'customer.subscription.created':
+        await handleSubscriptionCreated(event.data.object, connectedAccountId);
+        break;
+
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(event.data.object, connectedAccountId);
+        break;
+
+      case 'customer.subscription.deleted':
+        await handleSubscriptionDeleted(event.data.object, connectedAccountId);
+        break;
+
+      case 'invoice.payment_succeeded':
+        await handleInvoicePaymentSucceeded(event.data.object, connectedAccountId);
+        break;
+
+      case 'invoice.payment_failed':
+        await handleInvoicePaymentFailed(event.data.object, connectedAccountId);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// Webhook handler functions
+async function handleCheckoutCompleted(session, connectedAccountId) {
+  // Find which app this connected account belongs to
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Checkout completed:', {
+    session_id: session.id,
+    customer_id: session.customer,
+    subscription_id: session.subscription,
+    payment_intent_id: session.payment_intent,
+    mode: session.mode,
+    amount_total: session.amount_total,
+    currency: session.currency,
+    customer_email: session.customer_details?.email,
+    metadata: session.metadata,
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Save customer and payment data to database
+  // This is where you'd create/update user subscription status
+}
+
+async function handleSubscriptionCreated(subscription, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Subscription created:', {
+    subscription_id: subscription.id,
+    customer_id: subscription.customer,
+    status: subscription.status,
+    current_period_start: new Date(subscription.current_period_start * 1000),
+    current_period_end: new Date(subscription.current_period_end * 1000),
+    trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+    items: subscription.items.data.map(item => ({
+      price_id: item.price.id,
+      quantity: item.quantity
+    })),
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Grant user access to app features based on subscription
+}
+
+async function handleSubscriptionUpdated(subscription, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Subscription updated:', {
+    subscription_id: subscription.id,
+    customer_id: subscription.customer,
+    status: subscription.status,
+    previous_attributes: subscription.previous_attributes,
+    items: subscription.items.data.map(item => ({
+      price_id: item.price.id,
+      quantity: item.quantity
+    })),
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Update user access based on new subscription details
+  // Handle plan changes, status changes (active, canceled, past_due)
+}
+
+async function handleSubscriptionDeleted(subscription, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Subscription deleted:', {
+    subscription_id: subscription.id,
+    customer_id: subscription.customer,
+    status: subscription.status,
+    canceled_at: new Date(subscription.canceled_at * 1000),
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Revoke user access when subscription is canceled
+}
+
+async function handleInvoicePaymentSucceeded(invoice, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Invoice payment succeeded:', {
+    invoice_id: invoice.id,
+    customer_id: invoice.customer,
+    subscription_id: invoice.subscription,
+    amount_paid: invoice.amount_paid,
+    currency: invoice.currency,
+    period_start: new Date(invoice.period_start * 1000),
+    period_end: new Date(invoice.period_end * 1000),
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Extend subscription period, send receipt
+}
+
+async function handleInvoicePaymentFailed(invoice, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Invoice payment failed:', {
+    invoice_id: invoice.id,
+    customer_id: invoice.customer,
+    subscription_id: invoice.subscription,
+    amount_due: invoice.amount_due,
+    attempt_count: invoice.attempt_count,
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Notify user of failed payment, potentially suspend access
+}
+
+// Helper function to find app ID from Stripe account ID
+async function getAppIdFromStripeAccount(stripeAccountId) {
+  try {
+    const appData = await supabaseService.getAppByStripeAccount(stripeAccountId);
+    return appData?.id || null;
+  } catch (error) {
+    console.error('Error finding app for Stripe account:', stripeAccountId, error);
+    return null;
+  }
+}
 
 // GET /stripe/prices/:appId - Get all active prices for an app
 app.get('/stripe/prices/:appId', async (req, res) => {

@@ -72,6 +72,26 @@ class SupabaseService {
       throw error;
     }
   }
+
+  async getAppByStripeAccount(stripeAccountId) {
+    try {
+      const { data, error } = await this.client
+        .from('stripe_accounts')
+        .select('project_id')
+        .eq('stripe_user_id', stripeAccountId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching app by stripe account:', error);
+        throw error;
+      }
+
+      return { id: data?.project_id };
+    } catch (error) {
+      console.error('Error in getAppByStripeAccount:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new SupabaseService();
