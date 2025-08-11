@@ -10,7 +10,7 @@ const supabaseService = require('./services/supabaseService');
 const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
 const { validateAccess, requireAuth } = require('./middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
-const stripe = require('stripe')(process.env.STRIPE_CLIENT_SECRET);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_CLIENT_SECRET);
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -55,7 +55,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Body parser middleware (with raw body for webhooks)
+// Body parser middleware - webhook endpoint needs raw body BEFORE json parsing
 app.use('/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -291,13 +291,19 @@ app.post('/stripe/webhook', async (req, res) => {
     return res.status(500).send('Webhook secret not configured');
   }
 
+  console.log('Webhook signature:', sig);
+  console.log('Request body type:', typeof req.body);
+  console.log('Request body length:', req.body?.length);
+
   let event;
 
   try {
-    // Verify webhook signature - this ensures the webhook is from Stripe
+    // Verify webhook signature using platform Stripe instance
+    // Note: Use the platform stripe instance (initialized with STRIPE_CLIENT_SECRET)
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
+    console.error('Raw body:', req.body);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
