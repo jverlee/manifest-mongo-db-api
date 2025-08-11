@@ -31,6 +31,47 @@ class SupabaseService {
       throw error;
     }
   }
+
+  async getStripeAccount(projectId) {
+    try {
+      const { data, error } = await this.client
+        .from('stripe_accounts')
+        .select('*')
+        .eq('project_id', projectId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching stripe account:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getStripeAccount:', error);
+      throw error;
+    }
+  }
+
+  async getStripeCustomer(userId, appId) {
+    try {
+      const { data, error } = await this.client
+        .from('stripe_customers')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('project_id', appId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching stripe customer:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getStripeCustomer:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new SupabaseService();

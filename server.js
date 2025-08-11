@@ -8,8 +8,9 @@ const authRoutes = require('./routes/auth');
 const entityService = require('./services/entityService');
 const supabaseService = require('./services/supabaseService');
 const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
-const { validateAccess } = require('./middleware/authMiddleware');
+const { validateAccess, requireAuth } = require('./middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
+const stripe = require('stripe')(process.env.STRIPE_CLIENT_SECRET);
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -74,6 +75,166 @@ app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.sendStatus(200);
+});
+
+// =============================================================================
+// STRIPE ROUTES
+// =============================================================================
+
+// GET /stripe/checkout/:appId - Create a checkout session and redirect to Stripe Checkout
+app.get('/stripe/checkout/:appId', async (req, res) => {
+  try {
+    const { appId } = req.params;
+    
+    // Get Stripe account details from Supabase
+    const stripeAccount = await supabaseService.getStripeAccount(appId);
+    
+    if (!stripeAccount) {
+      return res.status(404).json(errorResponse(
+        'Stripe account not found',
+        'No Stripe account configured for this app',
+        404
+      ));
+    }
+
+    // Create Stripe checkout session using the connected account's access token
+    const connectedStripe = require('stripe')(stripeAccount.access_token);
+    const session = await connectedStripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'App Subscription',
+              description: 'Monthly subscription to the app'
+            },
+            unit_amount: 1999, // $19.99 per month
+            recurring: {
+              interval: 'month',
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${req.protocol}://${req.get('host')}/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel`,
+    });
+
+    // Redirect to Stripe Checkout
+    res.redirect(session.url);
+  } catch (error) {
+    console.error('Error creating Stripe checkout session:', error);
+    res.status(500).json(errorResponse(error, 'Failed to create checkout session'));
+  }
+});
+
+// GET /stripe/portal/:appId - Create customer portal session
+app.get('/stripe/portal/:appId', requireAuth, async (req, res) => {
+  try {
+    const { appId } = req.params;
+    const userId = req.user.id;
+    
+    // Get Stripe account details from Supabase
+    const stripeAccount = await supabaseService.getStripeAccount(appId);
+    
+    if (!stripeAccount) {
+      return res.status(404).json(errorResponse(
+        'Stripe account not found',
+        'No Stripe account configured for this app',
+        404
+      ));
+    }
+
+    // Get customer ID for this user and app
+    const customer = await supabaseService.getStripeCustomer(userId, appId);
+    
+    if (!customer || !customer.stripe_customer_id) {
+      return res.status(404).json(errorResponse(
+        'Customer not found',
+        'No active subscription found for this user',
+        404
+      ));
+    }
+
+    // Create customer portal session using the connected account
+    const connectedStripe = require('stripe')(stripeAccount.access_token);
+    const session = await connectedStripe.billingPortal.sessions.create({
+      customer: customer.stripe_customer_id,
+      return_url: `${req.protocol}://${req.get('host')}/dashboard`,
+    });
+
+    // Redirect to Stripe Customer Portal
+    res.redirect(session.url);
+  } catch (error) {
+    console.error('Error creating customer portal session:', error);
+    res.status(500).json(errorResponse(error, 'Failed to create customer portal session'));
+  }
+});
+
+// GET /stripe/prices/:appId - Get all active prices for an app
+app.get('/stripe/prices/:appId', async (req, res) => {
+  try {
+    const { appId } = req.params;
+    
+    // Get Stripe account details from Supabase
+    const stripeAccount = await supabaseService.getStripeAccount(appId);
+    
+    if (!stripeAccount) {
+      return res.status(404).json(errorResponse(
+        'Stripe account not found',
+        'No Stripe account configured for this app',
+        404
+      ));
+    }
+
+    // Create Stripe instance for the connected account
+    const connectedStripe = require('stripe')(stripeAccount.access_token);
+    
+    // Get all products with the matching metadata
+    const products = await connectedStripe.products.list({
+      active: true,
+      expand: ['data.default_price']
+    });
+    
+    // Filter products that have the matching app metadata
+    const appProducts = products.data.filter(product => 
+      product.metadata && product.metadata.manifest_app_id === appId
+    );
+    
+    if (appProducts.length === 0) {
+      return res.json(createResponse([], 0, appId, 'prices'));
+    }
+    
+    // Get all prices for these products
+    const allPrices = [];
+    
+    for (const product of appProducts) {
+      const prices = await connectedStripe.prices.list({
+        product: product.id,
+        active: true
+      });
+      
+      // Add product info to each price for context
+      const pricesWithProduct = prices.data.map(price => ({
+        ...price,
+        product_info: {
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          metadata: product.metadata
+        }
+      }));
+      
+      allPrices.push(...pricesWithProduct);
+    }
+    
+    res.json(createResponse(allPrices, allPrices.length, appId, 'prices'));
+  } catch (error) {
+    console.error('Error fetching Stripe prices:', error);
+    res.status(500).json(errorResponse(error, 'Failed to fetch prices'));
+  }
 });
 
 // =============================================================================
