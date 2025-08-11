@@ -66,46 +66,28 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
     return res.status(500).send('Webhook secret not configured');
   }
 
-  console.log('Webhook signature:', sig);
-  console.log('Request body type:', typeof req.body);
-  console.log('Request body length:', req.body?.length);
-  console.log('Is Buffer:', Buffer.isBuffer(req.body));
-  console.log('Webhook secret configured:', !!endpointSecret);
-  console.log('Webhook secret length:', endpointSecret?.length);
-  console.log('Webhook secret starts with:', endpointSecret?.substring(0, 10));
-
   let event;
 
   try {
     // Verify webhook signature using platform Stripe instance
-    // req.body should be a Buffer when using express.raw()
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-    console.log('✅ Platform webhook signature verification SUCCESSFUL!');
+    console.log('✅ Webhook verified:', event.type, event.id);
   } catch (err) {
-    console.error('Platform webhook signature verification failed:', err.message);
-    
-    // For now, parse without verification to keep webhooks working
-    // TODO: Configure proper webhook secrets for connected accounts
-    console.log('⚠️  BYPASSING signature verification - configure proper webhook secrets');
-    try {
-      event = JSON.parse(req.body.toString());
-      console.log('Event parsed successfully:', event.type, event.id);
-    } catch (parseErr) {
-      console.error('Failed to parse JSON:', parseErr.message);
-      return res.status(400).send(`JSON Parse Error: ${parseErr.message}`);
-    }
+    console.error('❌ Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   // For Connect accounts, the event will have an 'account' property
   const connectedAccountId = event.account;
-  console.log('Received webhook event:', event.type, 'ID:', event.id, 'Account:', connectedAccountId);
 
   try {
     switch (event.type) {
+      // Checkout events
       case 'checkout.session.completed':
         await handleCheckoutCompleted(event.data.object, connectedAccountId);
         break;
 
+      // Subscription events
       case 'customer.subscription.created':
         await handleSubscriptionCreated(event.data.object, connectedAccountId);
         break;
@@ -118,12 +100,30 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
         await handleSubscriptionDeleted(event.data.object, connectedAccountId);
         break;
 
+      // Invoice events
       case 'invoice.payment_succeeded':
         await handleInvoicePaymentSucceeded(event.data.object, connectedAccountId);
         break;
 
       case 'invoice.payment_failed':
         await handleInvoicePaymentFailed(event.data.object, connectedAccountId);
+        break;
+
+      // Payment events
+      case 'payment_intent.created':
+        await handlePaymentIntentCreated(event.data.object, connectedAccountId);
+        break;
+
+      case 'payment_intent.succeeded':
+        await handlePaymentIntentSucceeded(event.data.object, connectedAccountId);
+        break;
+
+      case 'charge.succeeded':
+        await handleChargeSucceeded(event.data.object, connectedAccountId);
+        break;
+
+      case 'charge.updated':
+        await handleChargeUpdated(event.data.object, connectedAccountId);
         break;
 
       default:
@@ -473,6 +473,67 @@ async function handleInvoicePaymentFailed(invoice, connectedAccountId) {
   });
 
   // TODO: Notify user of failed payment, potentially suspend access
+}
+
+async function handlePaymentIntentCreated(paymentIntent, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Payment intent created:', {
+    payment_intent_id: paymentIntent.id,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    status: paymentIntent.status,
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Track payment intent creation for analytics
+}
+
+async function handlePaymentIntentSucceeded(paymentIntent, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Payment intent succeeded:', {
+    payment_intent_id: paymentIntent.id,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    customer: paymentIntent.customer,
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Process successful one-time payment, grant access
+}
+
+async function handleChargeSucceeded(charge, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Charge succeeded:', {
+    charge_id: charge.id,
+    amount: charge.amount,
+    currency: charge.currency,
+    customer: charge.customer,
+    payment_intent: charge.payment_intent,
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Confirm payment completion, send receipts
+}
+
+async function handleChargeUpdated(charge, connectedAccountId) {
+  const appId = await getAppIdFromStripeAccount(connectedAccountId);
+  
+  console.log('Charge updated:', {
+    charge_id: charge.id,
+    amount: charge.amount,
+    status: charge.status,
+    customer: charge.customer,
+    connected_account: connectedAccountId,
+    app_id: appId
+  });
+
+  // TODO: Handle charge status changes (disputed, refunded, etc.)
 }
 
 // Helper function to find app ID from Stripe account ID
