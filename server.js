@@ -101,8 +101,9 @@ app.get('/stripe/checkout/:appId/prices/:priceId', async (req, res) => {
     const connectedStripe = require('stripe')(stripeAccount.access_token);
     
     // Validate that the price exists and belongs to this app
+    let price;
     try {
-      const price = await connectedStripe.prices.retrieve(priceId, {
+      price = await connectedStripe.prices.retrieve(priceId, {
         expand: ['product']
       });
       
@@ -131,10 +132,13 @@ app.get('/stripe/checkout/:appId/prices/:priceId', async (req, res) => {
       ));
     }
 
+    // Determine checkout mode based on price type
+    const mode = price.recurring ? 'subscription' : 'payment';
+
     // Create Stripe checkout session using the price ID
     const session = await connectedStripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      mode: 'subscription',
+      mode: mode,
       line_items: [
         {
           price: priceId,
