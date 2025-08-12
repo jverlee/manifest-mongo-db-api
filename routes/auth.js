@@ -315,12 +315,30 @@ router.post('/:appId/password/login', async (req, res, next) => {
 
 router.get('/apps/:appId/me', sessionService.requireAuth, async (req, res, next) => {
   try {
-    const { appId, endUserId } = req.auth;
+    const requestedAppId = req.params.appId;
+    const { appId: sessionAppId, endUserId } = req.auth;
+    
+    // Validate that the session is for the requested app
+    if (requestedAppId !== sessionAppId) {
+      return res.status(403).json({ 
+        error: 'forbidden',
+        message: 'Session does not belong to this app'
+      });
+    }
+    
+    // Verify the app exists
+    const appConfig = await supabaseService.getAppConfig(requestedAppId);
+    if (!appConfig) {
+      return res.status(404).json({
+        error: 'not_found',
+        message: 'App not found'
+      });
+    }
     
     const { data, error } = await supabaseService.client
       .from('end_users')
       .select('id, app_id, display_name, primary_email, email_verified, created_at')
-      .eq('app_id', appId)
+      .eq('app_id', requestedAppId)
       .eq('id', endUserId)
       .single();
 
