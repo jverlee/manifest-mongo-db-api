@@ -3,14 +3,25 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const passport = require('./config/passport');
-const authRoutes = require('./routes/auth');
-const entityService = require('./services/entityService');
+const authRoutes = require('./routes/authRoutes');
+const appRoutes = require('./routes/appRoutes');
 const supabaseService = require('./services/supabaseService');
 const sessionService = require('./services/sessionService');
 const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
-const { validateAccess, requireAuth } = require('./middleware/authMiddleware');
-const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
+const { errorResponse } = require('./utils/responseUtils');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_CLIENT_SECRET);
+const {
+  handleCheckoutCompleted,
+  handleSubscriptionCreated,
+  handleSubscriptionUpdated,
+  handleSubscriptionDeleted,
+  handleInvoicePaymentSucceeded,
+  handleInvoicePaymentFailed,
+  handlePaymentIntentCreated,
+  handlePaymentIntentSucceeded,
+  handleChargeSucceeded,
+  handleChargeUpdated
+} = require('./utils/stripeHelpers');
 
 const app = express();
 const PORT = process.env.PORT || 3500;
@@ -128,12 +139,12 @@ app.use(express.urlencoded({ extended: true }));
 // Auth routes - add session middleware
 app.use('/auth', sessionService.attachUserFromSession, authRoutes);
 
+// App routes - all routes under /apps/:appId
+app.use('/apps/:appId', appRoutes);
+
 // Apply database middleware to all API routes
 app.use('/', validateDatabaseConnection);
 app.use('/', handleDatabaseError);
-
-// Add session middleware to entity routes that need authentication
-app.use('/:appId/entities', sessionService.attachUserFromSession);
 
 // Global OPTIONS handler as fallback
 app.options('*', (req, res) => {
@@ -147,127 +158,8 @@ app.options('*', (req, res) => {
 });
 
 // =============================================================================
-// STRIPE ROUTES
+// STRIPE WEBHOOK ROUTES
 // =============================================================================
-
-// GET /stripe/checkout/:appId/prices/:priceId - Create a checkout session and redirect to Stripe Checkout
-app.get('/stripe/checkout/:appId/prices/:priceId', async (req, res) => {
-  try {
-    const { appId, priceId } = req.params;
-    
-    // Get Stripe account details from Supabase
-    const stripeAccount = await supabaseService.getStripeAccount(appId);
-    
-    if (!stripeAccount) {
-      return res.status(404).json(errorResponse(
-        'Stripe account not found',
-        'No Stripe account configured for this app',
-        404
-      ));
-    }
-
-    // Create Stripe instance for the connected account
-    const connectedStripe = require('stripe')(stripeAccount.access_token);
-    
-    // Validate that the price exists and belongs to this app
-    let price;
-    try {
-      price = await connectedStripe.prices.retrieve(priceId, {
-        expand: ['product']
-      });
-      
-      // Check if the price is active
-      if (!price.active) {
-        return res.status(400).json(errorResponse(
-          'Price not available',
-          'The selected price is not currently active',
-          400
-        ));
-      }
-      
-      // Check if the product belongs to this app
-      if (!price.product.metadata || price.product.metadata.manifest_app_id !== appId) {
-        return res.status(403).json(errorResponse(
-          'Price not accessible',
-          'The selected price does not belong to this app',
-          403
-        ));
-      }
-    } catch (error) {
-      return res.status(404).json(errorResponse(
-        'Price not found',
-        'The specified price does not exist',
-        404
-      ));
-    }
-
-    // Determine checkout mode based on price type
-    const mode = price.recurring ? 'subscription' : 'payment';
-
-    // Create Stripe checkout session using the price ID
-    const session = await connectedStripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: mode,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${req.protocol}://${req.get('host')}/stripe/success?session_id={CHECKOUT_SESSION_ID}&app_id=${appId}`,
-      cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel?app_id=${appId}`,
-    });
-
-    // Redirect to Stripe Checkout
-    res.redirect(session.url);
-  } catch (error) {
-    console.error('Error creating Stripe checkout session:', error);
-    res.status(500).json(errorResponse(error, 'Failed to create checkout session'));
-  }
-});
-
-// GET /stripe/portal/:appId - Create customer portal session
-app.get('/stripe/portal/:appId', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
-  try {
-    const { appId } = req.params;
-    const userId = req.auth.endUserId;
-    
-    // Get Stripe account details from Supabase
-    const stripeAccount = await supabaseService.getStripeAccount(appId);
-    
-    if (!stripeAccount) {
-      return res.status(404).json(errorResponse(
-        'Stripe account not found',
-        'No Stripe account configured for this app',
-        404
-      ));
-    }
-
-    // Get customer ID for this user and app
-    const customer = await supabaseService.getStripeCustomer(userId, appId);
-    
-    if (!customer || !customer.stripe_customer_id) {
-      return res.status(404).json(errorResponse(
-        'Customer not found',
-        'No active subscription found for this user',
-        404
-      ));
-    }
-
-    // Create customer portal session using the connected account
-    const connectedStripe = require('stripe')(stripeAccount.access_token);
-    const session = await connectedStripe.billingPortal.sessions.create({
-      customer: customer.stripe_customer_id,
-      return_url: `${req.protocol}://${req.get('host')}/dashboard`,
-    });
-
-    // Redirect to Stripe Customer Portal
-    res.redirect(session.url);
-  } catch (error) {
-    console.error('Error creating customer portal session:', error);
-    res.status(500).json(errorResponse(error, 'Failed to create customer portal session'));
-  }
-});
 
 // GET /stripe/success - Handle successful payment
 app.get('/stripe/success', async (req, res) => {
@@ -343,467 +235,13 @@ app.get('/stripe/cancel', async (req, res) => {
     <body>
       <h1>Payment Cancelled</h1>
       <p>Your payment was cancelled. No charges were made.</p>
-      <p><a href="/stripe/checkout/${app_id}">Try Again</a></p>
+      <p><a href="/apps/${app_id}/stripe/checkout">Try Again</a></p>
     </body>
     </html>
   `);
 });
 
-// Webhook handler functions
-async function handleCheckoutCompleted(session, connectedAccountId) {
-  // Find which app this connected account belongs to
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Checkout completed:', {
-    session_id: session.id,
-    customer_id: session.customer,
-    subscription_id: session.subscription,
-    payment_intent_id: session.payment_intent,
-    mode: session.mode,
-    amount_total: session.amount_total,
-    currency: session.currency,
-    customer_email: session.customer_details?.email,
-    metadata: session.metadata,
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
 
-  // TODO: Save customer and payment data to database
-  // This is where you'd create/update user subscription status
-}
-
-async function handleSubscriptionCreated(subscription, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Subscription created:', {
-    subscription_id: subscription.id,
-    customer_id: subscription.customer,
-    status: subscription.status,
-    current_period_start: new Date(subscription.current_period_start * 1000),
-    current_period_end: new Date(subscription.current_period_end * 1000),
-    trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-    items: subscription.items.data.map(item => ({
-      price_id: item.price.id,
-      quantity: item.quantity
-    })),
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Grant user access to app features based on subscription
-}
-
-async function handleSubscriptionUpdated(subscription, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Subscription updated:', {
-    subscription_id: subscription.id,
-    customer_id: subscription.customer,
-    status: subscription.status,
-    previous_attributes: subscription.previous_attributes,
-    items: subscription.items.data.map(item => ({
-      price_id: item.price.id,
-      quantity: item.quantity
-    })),
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Update user access based on new subscription details
-  // Handle plan changes, status changes (active, canceled, past_due)
-}
-
-async function handleSubscriptionDeleted(subscription, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Subscription deleted:', {
-    subscription_id: subscription.id,
-    customer_id: subscription.customer,
-    status: subscription.status,
-    canceled_at: new Date(subscription.canceled_at * 1000),
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Revoke user access when subscription is canceled
-}
-
-async function handleInvoicePaymentSucceeded(invoice, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Invoice payment succeeded:', {
-    invoice_id: invoice.id,
-    customer_id: invoice.customer,
-    subscription_id: invoice.subscription,
-    amount_paid: invoice.amount_paid,
-    currency: invoice.currency,
-    period_start: new Date(invoice.period_start * 1000),
-    period_end: new Date(invoice.period_end * 1000),
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Extend subscription period, send receipt
-}
-
-async function handleInvoicePaymentFailed(invoice, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Invoice payment failed:', {
-    invoice_id: invoice.id,
-    customer_id: invoice.customer,
-    subscription_id: invoice.subscription,
-    amount_due: invoice.amount_due,
-    attempt_count: invoice.attempt_count,
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Notify user of failed payment, potentially suspend access
-}
-
-async function handlePaymentIntentCreated(paymentIntent, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Payment intent created:', {
-    payment_intent_id: paymentIntent.id,
-    amount: paymentIntent.amount,
-    currency: paymentIntent.currency,
-    status: paymentIntent.status,
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Track payment intent creation for analytics
-}
-
-async function handlePaymentIntentSucceeded(paymentIntent, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Payment intent succeeded:', {
-    payment_intent_id: paymentIntent.id,
-    amount: paymentIntent.amount,
-    currency: paymentIntent.currency,
-    customer: paymentIntent.customer,
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Process successful one-time payment, grant access
-}
-
-async function handleChargeSucceeded(charge, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Charge succeeded:', {
-    charge_id: charge.id,
-    amount: charge.amount,
-    currency: charge.currency,
-    customer: charge.customer,
-    payment_intent: charge.payment_intent,
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Confirm payment completion, send receipts
-}
-
-async function handleChargeUpdated(charge, connectedAccountId) {
-  const appId = await getAppIdFromStripeAccount(connectedAccountId);
-  
-  console.log('Charge updated:', {
-    charge_id: charge.id,
-    amount: charge.amount,
-    status: charge.status,
-    customer: charge.customer,
-    connected_account: connectedAccountId,
-    app_id: appId
-  });
-
-  // TODO: Handle charge status changes (disputed, refunded, etc.)
-}
-
-// Helper function to find app ID from Stripe account ID
-async function getAppIdFromStripeAccount(stripeAccountId) {
-  try {
-    const appData = await supabaseService.getAppByStripeAccount(stripeAccountId);
-    return appData?.id || null;
-  } catch (error) {
-    console.error('Error finding app for Stripe account:', stripeAccountId, error);
-    return null;
-  }
-}
-
-// GET /stripe/prices/:appId - Get all active prices for an app
-app.get('/stripe/prices/:appId', async (req, res) => {
-  try {
-    const { appId } = req.params;
-    
-    // Get Stripe account details from Supabase
-    const stripeAccount = await supabaseService.getStripeAccount(appId);
-    
-    if (!stripeAccount) {
-      return res.status(404).json(errorResponse(
-        'Stripe account not found',
-        'No Stripe account configured for this app',
-        404
-      ));
-    }
-
-    // Create Stripe instance for the connected account
-    const connectedStripe = require('stripe')(stripeAccount.access_token);
-    
-    // Get all products with the matching metadata
-    const products = await connectedStripe.products.list({
-      active: true,
-      expand: ['data.default_price']
-    });
-    
-    // Filter products that have the matching app metadata
-    const appProducts = products.data.filter(product => 
-      product.metadata && product.metadata.manifest_app_id === appId
-    );
-    
-    if (appProducts.length === 0) {
-      return res.json(createResponse([], 0, appId, 'prices'));
-    }
-    
-    // Get all prices for these products
-    const allPrices = [];
-    
-    for (const product of appProducts) {
-      const prices = await connectedStripe.prices.list({
-        product: product.id,
-        active: true
-      });
-      
-      // Add product info to each price for context
-      const pricesWithProduct = prices.data.map(price => ({
-        ...price,
-        product_info: {
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          metadata: product.metadata
-        }
-      }));
-      
-      allPrices.push(...pricesWithProduct);
-    }
-    
-    res.json(createResponse(allPrices, allPrices.length, appId, 'prices'));
-  } catch (error) {
-    console.error('Error fetching Stripe prices:', error);
-    res.status(500).json(errorResponse(error, 'Failed to fetch prices'));
-  }
-});
-
-// =============================================================================
-// CONFIG ROUTES
-// =============================================================================
-
-// GET /:appId/config - Get app configuration from Supabase
-app.get('/:appId/config', sessionService.attachUserFromSession, async (req, res) => {
-  try {
-    const { appId } = req.params;
-    const config = await supabaseService.getAppConfig(appId);
-    
-    res.json(config);
-  } catch (error) {
-    console.error('Error fetching app config:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch app configuration'
-    });
-  }
-});
-
-// =============================================================================
-// MONGODB API ROUTES
-// =============================================================================
-
-// READ operations
-// GET /:appId/entities/:collection - Get all documents
-app.get('/:appId/entities/:collection', validateAccess, async (req, res) => {
-  
-  console.log('Auth:', req.auth)
-
-  try {
-    const { appId, collection } = req.params;
-    const documents = await entityService.getAllDocuments(appId, collection);
-    
-    res.json(createResponse(documents, documents.length, appId, collection));
-  } catch (error) {
-    console.error('Error fetching documents:', error);
-    res.status(500).json(errorResponse(error, 'Failed to fetch documents'));
-  }
-});
-
-// GET /:appId/entities/:collection/:id - Get single document
-app.get('/:appId/entities/:collection/:id', validateAccess, async (req, res) => {
-  try {
-    const { appId, collection, id } = req.params;
-    const document = await entityService.getDocumentById(appId, collection, id);
-    
-    res.json(createResponse(document, null, appId, collection));
-  } catch (error) {
-    console.error('Error fetching document:', error);
-    if (error.message.includes('not found')) {
-      res.status(404).json(errorResponse(error, 'Document not found', 404));
-    } else {
-      res.status(500).json(errorResponse(error, 'Failed to fetch document'));
-    }
-  }
-});
-
-// CREATE operations
-// POST /:appId/entities/:collection - Create single document
-app.post('/:appId/entities/:collection', validateAccess, async (req, res) => {
-  try {
-    const { appId, collection } = req.params;
-    const documentData = req.body;
-    
-    if (!documentData || Object.keys(documentData).length === 0) {
-      return res.status(400).json(errorResponse(
-        'Invalid request body',
-        'Request body is required and cannot be empty',
-        400
-      ));
-    }
-    
-    const createdDocument = await entityService.createDocument(appId, collection, documentData);
-    
-    res.status(201).json(createResponse(createdDocument, null, appId, collection));
-  } catch (error) {
-    console.error('Error creating document:', error);
-    res.status(500).json(errorResponse(error, 'Failed to create document'));
-  }
-});
-
-// POST /:appId/entities/:collection/bulk - Create multiple documents
-app.post('/:appId/entities/:collection/bulk', validateAccess, async (req, res) => {
-  try {
-    const { appId, collection } = req.params;
-    const { documents } = req.body;
-    
-    if (!documents || !Array.isArray(documents) || documents.length === 0) {
-      return res.status(400).json(errorResponse(
-        'Invalid request body',
-        'Request body must contain a "documents" array with at least one document',
-        400
-      ));
-    }
-    
-    const results = await entityService.bulkCreateDocuments(appId, collection, documents);
-    
-    res.status(201).json(bulkResponse(results, appId, collection));
-  } catch (error) {
-    console.error('Error creating documents:', error);
-    res.status(500).json(errorResponse(error, 'Failed to create documents'));
-  }
-});
-
-// UPDATE operations
-// PUT /:appId/entities/:collection/:id - Update single document
-app.put('/:appId/entities/:collection/:id', validateAccess, async (req, res) => {
-  try {
-    const { appId, collection, id } = req.params;
-    const updateData = req.body;
-    
-    if (!updateData || Object.keys(updateData).length === 0) {
-      return res.status(400).json(errorResponse(
-        'Invalid request body',
-        'Request body is required and cannot be empty',
-        400
-      ));
-    }
-    
-    const updatedDocument = await entityService.updateDocument(appId, collection, id, updateData);
-    
-    res.json(createResponse(updatedDocument, null, appId, collection));
-  } catch (error) {
-    console.error('Error updating document:', error);
-    if (error.message.includes('not found')) {
-      res.status(404).json(errorResponse(error, 'Document not found', 404));
-    } else {
-      res.status(500).json(errorResponse(error, 'Failed to update document'));
-    }
-  }
-});
-
-// PUT /:appId/entities/:collection/bulk - Update multiple documents
-app.put('/:appId/entities/:collection/bulk', validateAccess, async (req, res) => {
-  try {
-    const { appId, collection } = req.params;
-    const { updates } = req.body;
-    
-    if (!updates || !Array.isArray(updates) || updates.length === 0) {
-      return res.status(400).json(errorResponse(
-        'Invalid request body',
-        'Request body must contain an "updates" array with at least one update object containing "id" and update data',
-        400
-      ));
-    }
-    
-    // Validate that each update has an id
-    const invalidUpdates = updates.filter(update => !update.id);
-    if (invalidUpdates.length > 0) {
-      return res.status(400).json(errorResponse(
-        'Invalid update objects',
-        'Each update object must contain an "id" field',
-        400
-      ));
-    }
-    
-    const results = await entityService.bulkUpdateDocuments(appId, collection, updates);
-    
-    res.json(bulkResponse(results, appId, collection));
-  } catch (error) {
-    console.error('Error updating documents:', error);
-    res.status(500).json(errorResponse(error, 'Failed to update documents'));
-  }
-});
-
-// DELETE operations
-// DELETE /:appId/entities/:collection/:id - Delete single document
-app.delete('/:appId/entities/:collection/:id', validateAccess, async (req, res) => {
-  try {
-    const { appId, collection, id } = req.params;
-    const deletedDocument = await entityService.deleteDocument(appId, collection, id);
-    
-    res.json(createResponse(deletedDocument, null, appId, collection));
-  } catch (error) {
-    console.error('Error deleting document:', error);
-    if (error.message.includes('not found')) {
-      res.status(404).json(errorResponse(error, 'Document not found', 404));
-    } else {
-      res.status(500).json(errorResponse(error, 'Failed to delete document'));
-    }
-  }
-});
-
-// DELETE /:appId/entities/:collection/bulk - Delete multiple documents
-app.delete('/:appId/entities/:collection/bulk', validateAccess, async (req, res) => {
-  try {
-    const { appId, collection } = req.params;
-    const { ids } = req.body;
-    
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json(errorResponse(
-        'Invalid request body',
-        'Request body must contain an "ids" array with at least one document ID',
-        400
-      ));
-    }
-    
-    const results = await entityService.bulkDeleteDocuments(appId, collection, ids);
-    
-    res.json(bulkResponse(results, appId, collection));
-  } catch (error) {
-    console.error('Error deleting documents:', error);
-    res.status(500).json(errorResponse(error, 'Failed to delete documents'));
-  }
-});
 
 // =============================================================================
 // HEALTH CHECK AND ROOT ENDPOINTS
@@ -825,7 +263,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      api: '/:appId/entities/:collection'
+      api: '/apps/:appId/entities/:collection'
     }
   });
 });
@@ -834,5 +272,5 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`MongoDB API Server is running on port ${PORT}`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
-  console.log(`API endpoints available at: http://localhost:${PORT}/{appId}/entities/{collection}`);
+  console.log(`API endpoints available at: http://localhost:${PORT}/apps/{appId}/entities/{collection}`);
 });

@@ -147,6 +147,8 @@ router.get('/google/callback',
         hostname: req.hostname,
         cookieOptions
       });
+
+      console.log('req.hostname', req.hostname);
       
       res.cookie(
         sessionService.cookieNameFor(appId), 
