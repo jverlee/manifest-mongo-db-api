@@ -2,11 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
 const passport = require('./config/passport');
 const authRoutes = require('./routes/auth');
 const entityService = require('./services/entityService');
 const supabaseService = require('./services/supabaseService');
+const SupabaseSessionStore = require('./stores/SupabaseSessionStore');
 const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
 const { validateAccess, requireAuth } = require('./middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
@@ -36,10 +36,9 @@ app.use(session({
   resave: true,
   saveUninitialized: true,
   name: 'connect.sid',
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    dbName: 'sessions',
-    collectionName: 'user_sessions',
+  store: new SupabaseSessionStore({
+    client: supabaseService.client,
+    tableName: 'end_user_sessions',
     ttl: 24 * 60 * 60
   }),
   cookie: {
