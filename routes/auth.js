@@ -74,31 +74,22 @@ router.get('/google/callback',
       const name = profile.name || null;
       const avatar = profile.avatar || null;
 
-      // First, try to find existing user by email for this app
-      const { data: existingUser } = await supabaseService.client
-        .from('end_users')
-        .select('id')
+      // First, check if this identity already exists (dedupe by identity, not email)
+      const { data: existingIdentity } = await supabaseService.client
+        .from('end_user_identities')
+        .select('end_user_id')
         .eq('app_id', appId)
-        .eq('primary_email', email)
+        .eq('provider', 'google')
+        .eq('provider_user_id', providerUserId)
         .single();
 
       let endUserId;
-      if (existingUser) {
-        // User exists, use their ID
-        endUserId = existingUser.id;
-        
-        // Update their display name if provided
-        if (name) {
-          await supabaseService.client
-            .from('end_users')
-            .update({
-              display_name: name,
-              email_verified: emailVerified
-            })
-            .eq('id', endUserId);
-        }
+      
+      if (existingIdentity) {
+        // Identity exists, use the existing user
+        endUserId = existingIdentity.end_user_id;
       } else {
-        // Create new user
+        // New identity, create a new user
         const { data: newUser, error: userError } = await supabaseService.client
           .from('end_users')
           .insert({
@@ -131,6 +122,8 @@ router.get('/google/callback',
           avatar_url: avatar,
           raw_profile: profile.profile || {},
           last_login_at: new Date().toISOString()
+        }, {
+          onConflict: 'app_id,provider,provider_user_id'
         })
         .select('end_user_id')
         .single();
