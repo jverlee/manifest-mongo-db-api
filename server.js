@@ -36,8 +36,8 @@ app.use(cookieParser());
 // Passport middleware (no session)
 app.use(passport.initialize());
 
-// Attach user from session middleware
-app.use(sessionService.attachUserFromSession);
+// Attach user from session middleware - only for routes that need it
+// app.use(sessionService.attachUserFromSession);
 
 // Stripe webhook route MUST be defined BEFORE express.json() middleware
 // to preserve raw body for signature verification
@@ -125,12 +125,15 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Auth routes
-app.use('/auth', authRoutes);
+// Auth routes - add session middleware
+app.use('/auth', sessionService.attachUserFromSession, authRoutes);
 
 // Apply database middleware to all API routes
 app.use('/', validateDatabaseConnection);
 app.use('/', handleDatabaseError);
+
+// Add session middleware to entity routes that need authentication
+app.use('/:appId/entities', sessionService.attachUserFromSession);
 
 // Global OPTIONS handler as fallback
 app.options('*', (req, res) => {
@@ -224,7 +227,7 @@ app.get('/stripe/checkout/:appId/prices/:priceId', async (req, res) => {
 });
 
 // GET /stripe/portal/:appId - Create customer portal session
-app.get('/stripe/portal/:appId', requireAuth, async (req, res) => {
+app.get('/stripe/portal/:appId', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
   try {
     const { appId } = req.params;
     const userId = req.auth.endUserId;
@@ -600,7 +603,7 @@ app.get('/stripe/prices/:appId', async (req, res) => {
 // =============================================================================
 
 // GET /:appId/config - Get app configuration from Supabase
-app.get('/:appId/config', async (req, res) => {
+app.get('/:appId/config', sessionService.attachUserFromSession, async (req, res) => {
   try {
     const { appId } = req.params;
     const config = await supabaseService.getAppConfig(appId);

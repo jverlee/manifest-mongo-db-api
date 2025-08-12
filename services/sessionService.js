@@ -15,13 +15,15 @@ function hashToken(raw) {
 }
 
 function getCookieOptions(domain) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
   return {
     domain,
     httpOnly: true,
     // For cross-site (app domain -> db.madewithmanifest.com), cookie must be third-party:
-    // SameSite=None; Secure is required by modern browsers.
-    secure: true,                 // keep true in prod; for local dev, proxy through app domain instead
-    sameSite: 'none',
+    // SameSite=None; Secure is required by modern browsers in production
+    secure: isProduction,         // only true in production
+    sameSite: isProduction ? 'none' : 'lax', // 'none' only in production
     path: '/',
   };
 }
@@ -120,6 +122,8 @@ async function attachUserFromSession(req, res, next) {
 
     console.log('req.params', req.params);
     console.log('req.auth', req.auth);
+    console.log('req.cookies', req.cookies);
+    console.log('req.headers.cookie', req.headers.cookie);
     
     // If route has appId, only check that specific app's cookie
     if (routeAppId) {
