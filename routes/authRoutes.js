@@ -140,7 +140,7 @@ router.get('/google/callback',
       
       // Set cookie for the API server domain, not the app domain
       // This allows the cookie to be sent when making requests to the API
-      const cookieOptions = sessionService.getCookieOptions(req.hostname);
+      const cookieOptions = sessionService.getCookieOptions(req.hostname, appId);
       console.log('[COOKIE DEBUG] Setting cookie with options:', {
         cookieName: sessionService.cookieNameFor(appId),
         cookieValue: rawToken.substring(0, 8) + '...',
@@ -248,7 +248,7 @@ router.post('/:appId/password/signup', async (req, res, next) => {
     res.cookie(
       sessionService.cookieNameFor(appId), 
       rawToken, 
-      sessionService.getCookieOptions(req.hostname)
+      sessionService.getCookieOptions(req.hostname, appId)
     );
 
     return res.status(201).json({ ok: true });
@@ -305,7 +305,7 @@ router.post('/:appId/password/login', async (req, res, next) => {
     res.cookie(
       sessionService.cookieNameFor(appId), 
       rawToken, 
-      sessionService.getCookieOptions(req.hostname)
+      sessionService.getCookieOptions(req.hostname, appId)
     );
 
     return res.json({ ok: true });
@@ -360,7 +360,7 @@ router.post('/logout', sessionService.requireAuth, async (req, res, next) => {
     const { appId, tokenHash } = req.auth;
     await sessionService.deleteSession(appId, tokenHash);
     res.clearCookie(sessionService.cookieNameFor(appId), {
-      ...sessionService.getCookieOptions(req.hostname),
+      ...sessionService.getCookieOptions(req.hostname, appId),
       expires: new Date(0)
     });
     return res.json({ ok: true });
@@ -375,7 +375,7 @@ router.post('/logout-all', sessionService.requireAuth, async (req, res, next) =>
     const { appId, endUserId } = req.auth;
     await sessionService.deleteAllSessionsForUser(appId, endUserId);
     res.clearCookie(sessionService.cookieNameFor(appId), {
-      ...sessionService.getCookieOptions(req.hostname),
+      ...sessionService.getCookieOptions(req.hostname, appId),
       expires: new Date(0)
     });
     return res.json({ ok: true });

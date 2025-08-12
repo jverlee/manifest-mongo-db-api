@@ -14,7 +14,7 @@ function hashToken(raw) {
   return crypto.createHmac('sha256', pepper).update(raw).digest('hex');
 }
 
-function getCookieOptions(domain) {
+function getCookieOptions(domain, appId) {
   const isProduction = process.env.NODE_ENV === 'production';
   
   return {
@@ -24,7 +24,7 @@ function getCookieOptions(domain) {
     // SameSite=None; Secure is required by modern browsers in production
     secure: isProduction,         // only true in production
     sameSite: isProduction ? 'none' : 'lax', // 'none' only in production
-    path: '/',
+    path: `/apps/${appId}`,
   };
 }
 
