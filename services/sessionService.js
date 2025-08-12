@@ -116,95 +116,152 @@ async function deleteAllSessionsForUser(appId, endUserId) {
 
 async function attachUserFromSession(req, res, next) {
   try {
-    // Extract appId from various sources
-    let appId = req.params.appId;
+    const routeAppId = req.params.appId;
+
+    console.log('req.params', req.params);
+    console.log('req.auth', req.auth);
     
-    // If not in params, try to extract from URL path patterns
-    if (!appId) {
-      // Check for patterns like /auth/apps/:appId/* or /:appId/entities/*
-      const pathMatch = req.path.match(/\/(?:auth\/apps|apps)\/([^\/]+)/) || req.path.match(/^\/([^\/]+)\/(?:entities|config)/);
-      if (pathMatch) {
-        appId = pathMatch[1];
+    // If route has appId, only check that specific app's cookie
+    if (routeAppId) {
+      const name = cookieNameFor(routeAppId);
+      const fallbackName = process.env.SESSION_COOKIE_NAME || 'sid';
+      
+      console.log('[SESSION DEBUG] Route has appId, checking specific cookie:', {
+        routeAppId,
+        expectedCookieName: name,
+        fallbackCookieName: fallbackName,
+        availableCookies: Object.keys(req.cookies || {}),
+        path: req.path
+      });
+      
+      const raw = req.cookies?.[name] || req.cookies?.[fallbackName];
+      
+      if (!raw) {
+        console.log('[SESSION DEBUG] No session cookie found for route appId');
+        return next();
+      }
+      
+      return await validateSessionForApp(req, res, next, routeAppId, raw, name, fallbackName);
+    }
+    
+    // If no route appId, check all possible app cookies to find a valid session
+    // This is secure because we validate the session belongs to the discovered appId
+    const cookies = req.cookies || {};
+    const fallbackName = process.env.SESSION_COOKIE_NAME || 'sid';
+    
+    console.log('[SESSION DEBUG] No route appId, checking all possible app cookies:', {
+      availableCookies: Object.keys(cookies),
+      path: req.path
+    });
+    
+    // First try the fallback cookie (old global sessions)
+    if (cookies[fallbackName]) {
+      const sessionData = await findSessionByToken(cookies[fallbackName]);
+      if (sessionData) {
+        console.log('[SESSION DEBUG] Found valid session using fallback cookie');
+        req.auth = { 
+          appId: sessionData.app_id, 
+          endUserId: sessionData.end_user_id, 
+          tokenHash: hashToken(cookies[fallbackName]),
+          cookieName: fallbackName 
+        };
+        return next();
       }
     }
     
-    // Skip if still no appId found
-    if (!appId) {
-      console.log('[SESSION DEBUG] No appId found in route params or path, skipping session attach:', {
-        path: req.path,
-        params: req.params
-      });
-      return next();
+    // Then try all per-app cookies (sid_<appId> pattern)
+    for (const [cookieName, cookieValue] of Object.entries(cookies)) {
+      if (cookieName.startsWith('sid_')) {
+        const sessionData = await findSessionByToken(cookieValue);
+        if (sessionData) {
+          console.log('[SESSION DEBUG] Found valid session using per-app cookie:', cookieName);
+          req.auth = { 
+            appId: sessionData.app_id, 
+            endUserId: sessionData.end_user_id, 
+            tokenHash: hashToken(cookieValue),
+            cookieName 
+          };
+          return next();
+        }
+      }
     }
     
-    // Set appId in params so getAppContext can find it
-    req.params.appId = appId;
-    const { appId: contextAppId } = await getAppContext(req);
-    const name = cookieNameFor(contextAppId);
-    const fallbackName = process.env.SESSION_COOKIE_NAME || 'sid';
-    
-    console.log('[SESSION DEBUG] Looking for session cookie:', {
-      appId: contextAppId,
-      expectedCookieName: name,
-      fallbackCookieName: fallbackName,
-      availableCookies: Object.keys(req.cookies || {}),
-      userAgent: req.get('user-agent'),
-      origin: req.get('origin'),
-      host: req.get('host')
+    console.log('[SESSION DEBUG] No valid session found in any cookie');
+    return next();
+  } catch (e) {
+    console.error('[SESSION DEBUG] Exception in attachUserFromSession:', e);
+    return next(e);
+  }
+}
+
+async function validateSessionForApp(req, res, next, appId, rawToken, cookieName, fallbackName) {
+  try {
+    console.log('[SESSION DEBUG] Validating session for specific app:', {
+      appId,
+      cookieUsed: req.cookies?.[cookieName] ? cookieName : fallbackName,
+      tokenLength: rawToken.length,
+      tokenPreview: rawToken.substring(0, 8) + '...'
     });
     
-    const raw = req.cookies?.[name] || req.cookies?.[fallbackName]; // fallback during migration
-    
-    if (!raw) {
-      console.log('[SESSION DEBUG] No session cookie found');
-      return next();
-    }
-    
-    console.log('[SESSION DEBUG] Found session cookie:', {
-      cookieUsed: req.cookies?.[name] ? name : fallbackName,
-      tokenLength: raw.length,
-      tokenPreview: raw.substring(0, 8) + '...'
-    });
-    
-    const tokenHash = hashToken(raw);
+    const tokenHash = hashToken(rawToken);
     const now = new Date().toISOString();
-    
-    console.log('[SESSION DEBUG] Looking up session in database:', {
-      appId: contextAppId,
-      tokenHashPreview: tokenHash.substring(0, 8) + '...',
-      currentTime: now
-    });
     
     const { data, error } = await supabaseService.client
       .from('end_user_sessions')
-      .select('end_user_id, expires_at, issued_at')
-      .eq('app_id', contextAppId)
+      .select('end_user_id, expires_at, issued_at, app_id')
+      .eq('app_id', appId)
       .eq('token_hash', tokenHash)
       .gt('expires_at', now)
       .limit(1)
       .single();
     
     if (!error && data) {
-      console.log('[SESSION DEBUG] Session found and valid:', {
+      console.log('[SESSION DEBUG] Session found and valid for app:', {
+        appId: data.app_id,
         endUserId: data.end_user_id,
         expiresAt: data.expires_at,
         issuedAt: data.issued_at
       });
-      req.auth = { appId: contextAppId, endUserId: data.end_user_id, tokenHash, cookieName: name };
+      
+      // Security: Verify the session actually belongs to the requested app
+      if (data.app_id !== appId) {
+        console.log('[SESSION DEBUG] Security violation: session app_id does not match route appId');
+        return next();
+      }
+      
+      req.auth = { appId, endUserId: data.end_user_id, tokenHash, cookieName };
     } else if (error) {
       console.log('[SESSION DEBUG] Session lookup failed:', {
         error: error.message,
         code: error.code,
         details: error.details
       });
-    } else {
-      console.log('[SESSION DEBUG] No session data returned (should not happen)');
     }
     
     return next();
   } catch (e) {
-    console.error('[SESSION DEBUG] Exception in attachUserFromSession:', e);
+    console.error('[SESSION DEBUG] Exception in validateSessionForApp:', e);
     return next(e);
+  }
+}
+
+async function findSessionByToken(rawToken) {
+  try {
+    const tokenHash = hashToken(rawToken);
+    const now = new Date().toISOString();
+    
+    const { data, error } = await supabaseService.client
+      .from('end_user_sessions')
+      .select('app_id, end_user_id, expires_at')
+      .eq('token_hash', tokenHash)
+      .gt('expires_at', now)
+      .limit(1)
+      .single();
+    
+    return (!error && data) ? data : null;
+  } catch (e) {
+    console.error('[SESSION DEBUG] Error in findSessionByToken:', e);
+    return null;
   }
 }
 
