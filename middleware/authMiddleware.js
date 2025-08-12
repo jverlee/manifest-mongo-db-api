@@ -17,7 +17,7 @@ async function validateAccess(req, res, next) {
     const { appId } = req.params;
     
     // Get app config based on :appId
-    const appConfig = await supabaseService.getProjectConfig(appId);
+    const appConfig = await supabaseService.getAppConfig(appId);
     
     // Check monetization requirements
     if (appConfig.monetization?.type === 'login_required') {
@@ -40,8 +40,8 @@ async function validateAccess(req, res, next) {
     
     next();
   } catch (error) {
-    console.error('Error in requireProjectAccess middleware:', error);
-    return res.status(500).json(errorResponse(error, 'Failed to verify project access'));
+    console.error('Error in requireAppAccess middleware:', error);
+    return res.status(500).json(errorResponse(error, 'Failed to verify app access'));
   }
 }
 

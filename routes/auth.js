@@ -17,7 +17,7 @@ router.get('/google', async (req, res, next) => {
   const { appId, redirectUrl } = req.query;
 
   // get config for appId
-  const config = await supabaseService.getProjectConfig(appId);
+  const config = await supabaseService.getAppConfig(appId);
 
   // if config.monetization.type is not 'login_required', return error
   if (config.monetization.type !== 'login_required') {

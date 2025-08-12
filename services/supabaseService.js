@@ -12,7 +12,7 @@ class SupabaseService {
     );
   }
 
-  async getProjectConfig(appId) {
+  async getAppConfig(appId) {
     try {
       const { data, error } = await this.client
         .from('apps')
@@ -21,23 +21,23 @@ class SupabaseService {
         .single();
 
       if (error) {
-        console.error('Error fetching project config:', error);
+        console.error('Error fetching app config:', error);
         throw error;
       }
 
       return data?.config || {};
     } catch (error) {
-      console.error('Error in getProjectConfig:', error);
+      console.error('Error in getAppConfig:', error);
       throw error;
     }
   }
 
-  async getStripeAccount(projectId) {
+  async getStripeAccount(appId) {
     try {
       const { data, error } = await this.client
         .from('stripe_accounts')
         .select('*')
-        .eq('project_id', projectId)
+        .eq('project_id', appId)
         .single();
 
       if (error) {

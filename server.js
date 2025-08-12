@@ -614,18 +614,18 @@ app.get('/stripe/prices/:appId', async (req, res) => {
 // CONFIG ROUTES
 // =============================================================================
 
-// GET /:appId/config - Get project configuration from Supabase
+// GET /:appId/config - Get app configuration from Supabase
 app.get('/:appId/config', async (req, res) => {
   try {
     const { appId } = req.params;
-    const config = await supabaseService.getProjectConfig(appId);
+    const config = await supabaseService.getAppConfig(appId);
     
     res.json(config);
   } catch (error) {
-    console.error('Error fetching project config:', error);
+    console.error('Error fetching app config:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch project configuration'
+      error: 'Failed to fetch app configuration'
     });
   }
 });
