@@ -304,7 +304,7 @@ router.post('/:appId/password/login', async (req, res, next) => {
   }
 });
 
-router.get('/me', sessionService.requireAuth, async (req, res, next) => {
+router.get('/apps/:appId/me', sessionService.requireAuth, async (req, res, next) => {
   try {
     const { appId, endUserId } = req.auth;
     
