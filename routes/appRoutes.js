@@ -224,11 +224,7 @@ router.get('/me', sessionService.attachUserFromSession, requireAuth, async (req,
     const { appId } = req.params;
     
     // Return user information from req.auth
-    res.json({
-      success: true,
-      appId: appId,
-      user: req.auth
-    });
+    res.json(req.auth);
   } catch (error) {
     console.error('Error fetching user info:', error);
     res.status(500).json({
