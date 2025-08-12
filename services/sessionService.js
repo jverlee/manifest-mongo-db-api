@@ -116,18 +116,35 @@ async function deleteAllSessionsForUser(appId, endUserId) {
 
 async function attachUserFromSession(req, res, next) {
   try {
-    // Skip if no appId in route params
-    if (!req.params.appId) {
-      console.log('[SESSION DEBUG] No appId in route params, skipping session attach');
+    // Extract appId from various sources
+    let appId = req.params.appId;
+    
+    // If not in params, try to extract from URL path patterns
+    if (!appId) {
+      // Check for patterns like /auth/apps/:appId/* or /:appId/entities/*
+      const pathMatch = req.path.match(/\/(?:auth\/apps|apps)\/([^\/]+)/) || req.path.match(/^\/([^\/]+)\/(?:entities|config)/);
+      if (pathMatch) {
+        appId = pathMatch[1];
+      }
+    }
+    
+    // Skip if still no appId found
+    if (!appId) {
+      console.log('[SESSION DEBUG] No appId found in route params or path, skipping session attach:', {
+        path: req.path,
+        params: req.params
+      });
       return next();
     }
     
-    const { appId } = await getAppContext(req);
-    const name = cookieNameFor(appId);
+    // Set appId in params so getAppContext can find it
+    req.params.appId = appId;
+    const { appId: contextAppId } = await getAppContext(req);
+    const name = cookieNameFor(contextAppId);
     const fallbackName = process.env.SESSION_COOKIE_NAME || 'sid';
     
     console.log('[SESSION DEBUG] Looking for session cookie:', {
-      appId,
+      appId: contextAppId,
       expectedCookieName: name,
       fallbackCookieName: fallbackName,
       availableCookies: Object.keys(req.cookies || {}),
@@ -153,7 +170,7 @@ async function attachUserFromSession(req, res, next) {
     const now = new Date().toISOString();
     
     console.log('[SESSION DEBUG] Looking up session in database:', {
-      appId,
+      appId: contextAppId,
       tokenHashPreview: tokenHash.substring(0, 8) + '...',
       currentTime: now
     });
@@ -161,7 +178,7 @@ async function attachUserFromSession(req, res, next) {
     const { data, error } = await supabaseService.client
       .from('end_user_sessions')
       .select('end_user_id, expires_at, issued_at')
-      .eq('app_id', appId)
+      .eq('app_id', contextAppId)
       .eq('token_hash', tokenHash)
       .gt('expires_at', now)
       .limit(1)
@@ -173,7 +190,7 @@ async function attachUserFromSession(req, res, next) {
         expiresAt: data.expires_at,
         issuedAt: data.issued_at
       });
-      req.auth = { appId, endUserId: data.end_user_id, tokenHash, cookieName: name };
+      req.auth = { appId: contextAppId, endUserId: data.end_user_id, tokenHash, cookieName: name };
     } else if (error) {
       console.log('[SESSION DEBUG] Session lookup failed:', {
         error: error.message,

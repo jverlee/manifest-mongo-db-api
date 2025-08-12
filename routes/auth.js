@@ -140,7 +140,7 @@ router.get('/google/callback',
       const cookieDomain = new URL(redirectUrl).hostname;
       
       res.cookie(
-        process.env.SESSION_COOKIE_NAME || 'sid', 
+        sessionService.cookieNameFor(appId), 
         rawToken, 
         sessionService.getCookieOptions(cookieDomain)
       );
@@ -235,7 +235,7 @@ router.post('/:appId/password/signup', async (req, res, next) => {
     // Create session + cookie
     const { rawToken } = await sessionService.createSession(appId, endUserId, req);
     res.cookie(
-      process.env.SESSION_COOKIE_NAME || 'sid', 
+      sessionService.cookieNameFor(appId), 
       rawToken, 
       sessionService.getCookieOptions(req.hostname)
     );
@@ -292,7 +292,7 @@ router.post('/:appId/password/login', async (req, res, next) => {
     // Create session + cookie
     const { rawToken } = await sessionService.createSession(appId, end_user_id, req);
     res.cookie(
-      process.env.SESSION_COOKIE_NAME || 'sid', 
+      sessionService.cookieNameFor(appId), 
       rawToken, 
       sessionService.getCookieOptions(req.hostname)
     );
@@ -330,7 +330,7 @@ router.post('/logout', sessionService.requireAuth, async (req, res, next) => {
   try {
     const { appId, tokenHash } = req.auth;
     await sessionService.deleteSession(appId, tokenHash);
-    res.clearCookie(process.env.SESSION_COOKIE_NAME || 'sid');
+    res.clearCookie(sessionService.cookieNameFor(appId));
     return res.json({ ok: true });
   } catch (error) {
     console.error('Logout error:', error);
@@ -342,7 +342,7 @@ router.post('/logout-all', sessionService.requireAuth, async (req, res, next) =>
   try {
     const { appId, endUserId } = req.auth;
     await sessionService.deleteAllSessionsForUser(appId, endUserId);
-    res.clearCookie(process.env.SESSION_COOKIE_NAME || 'sid');
+    res.clearCookie(sessionService.cookieNameFor(appId));
     return res.json({ ok: true });
   } catch (error) {
     console.error('Logout all error:', error);
