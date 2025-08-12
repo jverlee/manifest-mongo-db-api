@@ -37,7 +37,7 @@ class SupabaseService {
       const { data, error } = await this.client
         .from('stripe_accounts')
         .select('*')
-        .eq('project_id', appId)
+        .eq('app_id', appId)
         .single();
 
       if (error) {
@@ -58,7 +58,7 @@ class SupabaseService {
         .from('stripe_customers')
         .select('*')
         .eq('user_id', userId)
-        .eq('project_id', appId)
+        .eq('app_id', appId)
         .single();
 
       if (error) {
@@ -77,7 +77,7 @@ class SupabaseService {
     try {
       const { data, error } = await this.client
         .from('stripe_accounts')
-        .select('project_id')
+        .select('app_id')
         .eq('stripe_user_id', stripeAccountId)
         .single();
 
@@ -86,7 +86,7 @@ class SupabaseService {
         throw error;
       }
 
-      return { id: data?.project_id };
+      return { id: data?.app_id };
     } catch (error) {
       console.error('Error in getAppByStripeAccount:', error);
       throw error;
