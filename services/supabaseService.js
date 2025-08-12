@@ -15,7 +15,7 @@ class SupabaseService {
   async getProjectConfig(appId) {
     try {
       const { data, error } = await this.client
-        .from('projects')
+        .from('apps')
         .select('config')
         .eq('id', appId)
         .single();
