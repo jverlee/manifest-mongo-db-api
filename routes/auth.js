@@ -74,40 +74,50 @@ router.get('/google/callback',
       const name = profile.name || null;
       const avatar = profile.avatar || null;
 
-      // First, ensure end_user exists
-      const { data: endUser, error: userError } = await supabaseService.client
+      // First, try to find existing user by email for this app
+      const { data: existingUser } = await supabaseService.client
         .from('end_users')
-        .upsert({
-          app_id: appId,
-          display_name: name,
-          primary_email: email,
-          email_verified: emailVerified
-        }, {
-          onConflict: 'app_id,primary_email',
-          ignoreDuplicates: false
-        })
         .select('id')
+        .eq('app_id', appId)
+        .eq('primary_email', email)
         .single();
 
       let endUserId;
-      if (userError && userError.code !== '23505') {
-        // Try to find existing user by email
-        const { data: existingUser } = await supabaseService.client
-          .from('end_users')
-          .select('id')
-          .eq('app_id', appId)
-          .eq('primary_email', email)
-          .single();
+      if (existingUser) {
+        // User exists, use their ID
+        endUserId = existingUser.id;
         
-        endUserId = existingUser?.id;
-        if (!endUserId) {
-          throw new Error(`Failed to create/find user: ${userError?.message}`);
+        // Update their display name if provided
+        if (name) {
+          await supabaseService.client
+            .from('end_users')
+            .update({
+              display_name: name,
+              email_verified: emailVerified
+            })
+            .eq('id', endUserId);
         }
       } else {
-        endUserId = endUser.id;
+        // Create new user
+        const { data: newUser, error: userError } = await supabaseService.client
+          .from('end_users')
+          .insert({
+            app_id: appId,
+            display_name: name,
+            primary_email: email,
+            email_verified: emailVerified
+          })
+          .select('id')
+          .single();
+
+        if (userError) {
+          throw new Error(`Failed to create user: ${userError.message}`);
+        }
+        
+        endUserId = newUser.id;
       }
 
-      // Upsert identity
+      // Upsert identity using the unique constraint uq_identity_per_app (app_id, provider, provider_user_id)
       const { data: identity, error: identityError } = await supabaseService.client
         .from('end_user_identities')
         .upsert({
@@ -121,8 +131,6 @@ router.get('/google/callback',
           avatar_url: avatar,
           raw_profile: profile.profile || {},
           last_login_at: new Date().toISOString()
-        }, {
-          onConflict: 'app_id,provider,provider_user_id'
         })
         .select('end_user_id')
         .single();
