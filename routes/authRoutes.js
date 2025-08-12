@@ -355,34 +355,5 @@ router.get('/apps/:appId/me', sessionService.requireAuth, async (req, res, next)
   }
 });
 
-router.post('/logout', sessionService.requireAuth, async (req, res, next) => {
-  try {
-    const { appId, tokenHash } = req.auth;
-    await sessionService.deleteSession(appId, tokenHash);
-    res.clearCookie(sessionService.cookieNameFor(appId), {
-      ...sessionService.getCookieOptions(req.hostname, appId),
-      expires: new Date(0)
-    });
-    return res.json({ ok: true });
-  } catch (error) {
-    console.error('Logout error:', error);
-    return next(error);
-  }
-});
-
-router.post('/logout-all', sessionService.requireAuth, async (req, res, next) => {
-  try {
-    const { appId, endUserId } = req.auth;
-    await sessionService.deleteAllSessionsForUser(appId, endUserId);
-    res.clearCookie(sessionService.cookieNameFor(appId), {
-      ...sessionService.getCookieOptions(req.hostname, appId),
-      expires: new Date(0)
-    });
-    return res.json({ ok: true });
-  } catch (error) {
-    console.error('Logout all error:', error);
-    return next(error);
-  }
-});
 
 module.exports = router;

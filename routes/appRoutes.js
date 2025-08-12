@@ -234,6 +234,22 @@ router.get('/me', sessionService.attachUserFromSession, requireAuth, async (req,
   }
 });
 
+// POST /apps/:appId/logout - Logout user
+router.post('/logout', sessionService.attachUserFromSession, requireAuth, async (req, res, next) => {
+  try {
+    const { appId, tokenHash } = req.auth;
+    await sessionService.deleteSession(appId, tokenHash);
+    res.clearCookie(sessionService.cookieNameFor(appId), {
+      ...sessionService.getCookieOptions(req.hostname, appId),
+      expires: new Date(0)
+    });
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return next(error);
+  }
+});
+
 // =============================================================================
 // MONGODB API ROUTES
 // =============================================================================
