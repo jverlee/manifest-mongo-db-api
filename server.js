@@ -1,12 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const passport = require('./config/passport');
 const authRoutes = require('./routes/auth');
 const entityService = require('./services/entityService');
 const supabaseService = require('./services/supabaseService');
-const SupabaseSessionStore = require('./stores/SupabaseSessionStore');
+const sessionService = require('./services/sessionService');
 const { validateDatabaseConnection, handleDatabaseError } = require('./middleware/databaseMiddleware');
 const { validateAccess, requireAuth } = require('./middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('./utils/responseUtils');
@@ -24,35 +24,20 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// Session middleware  
+// Cookie and session middleware  
 const isProduction = process.env.NODE_ENV === 'production';
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
-console.log('SESSION_SECRET length:', process.env.SESSION_SECRET?.length || 'undefined');
+console.log('SESSION_PEPPER exists:', !!process.env.SESSION_PEPPER);
 
 app.set('trust proxy', 1); // required for sessions to work properly in production
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-  resave: true,
-  saveUninitialized: true,
-  name: 'connect.sid',
-  store: new SupabaseSessionStore({
-    client: supabaseService.client,
-    tableName: 'end_user_sessions',
-    ttl: 24 * 60 * 60
-  }),
-  cookie: {
-    secure: isProduction,
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: isProduction ? 'none' : 'lax', // Change back to 'none' for cross-site
-    domain: isProduction ? undefined : 'localhost' // Remove domain restriction
-  }
-}));
+app.use(cookieParser());
 
-// Passport middleware
+// Passport middleware (no session)
 app.use(passport.initialize());
-app.use(passport.session());
+
+// Attach user from session middleware
+app.use(sessionService.attachUserFromSession);
 
 // Stripe webhook route MUST be defined BEFORE express.json() middleware
 // to preserve raw body for signature verification
@@ -242,7 +227,7 @@ app.get('/stripe/checkout/:appId/prices/:priceId', async (req, res) => {
 app.get('/stripe/portal/:appId', requireAuth, async (req, res) => {
   try {
     const { appId } = req.params;
-    const userId = req.user.id;
+    const userId = req.auth.endUserId;
     
     // Get Stripe account details from Supabase
     const stripeAccount = await supabaseService.getStripeAccount(appId);
@@ -638,7 +623,7 @@ app.get('/:appId/config', async (req, res) => {
 // GET /:appId/entities/:collection - Get all documents
 app.get('/:appId/entities/:collection', validateAccess, async (req, res) => {
   
-  console.log('User:', req.user)
+  console.log('Auth:', req.auth)
 
   try {
     const { appId, collection } = req.params;

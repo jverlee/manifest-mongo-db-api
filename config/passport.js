@@ -16,7 +16,7 @@ passport.use(new GoogleStrategy({
       provider: 'google',
       accessToken,
       refreshToken,
-      appId: req.session?.appId
+      profile: profile._json
     };
     
     return done(null, user);
@@ -24,15 +24,5 @@ passport.use(new GoogleStrategy({
     return done(error, null);
   }
 }));
-
-passport.serializeUser((user, done) => {
-  console.log('Serializing user:', user);
-  done(null, user);
-});
-
-passport.deserializeUser((user, done) => {
-  console.log('Deserializing user:', user);
-  done(null, user);
-});
 
 module.exports = passport;

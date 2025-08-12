@@ -2,7 +2,7 @@ const { errorResponse } = require('../utils/responseUtils');
 const supabaseService = require('../services/supabaseService');
 
 function requireAuth(req, res, next) {
-  if (!req.user) {
+  if (!req.auth) {
     return res.status(401).json(errorResponse(
       'Authentication required',
       'User must be authenticated to access this resource',
@@ -21,7 +21,7 @@ async function validateAccess(req, res, next) {
     
     // Check monetization requirements
     if (appConfig.monetization?.type === 'login_required') {
-      if (!req.user || !req.user.id) {
+      if (!req.auth || !req.auth.endUserId) {
         return res.status(401).json(errorResponse(
           'Authentication required',
           'This app requires user authentication',
@@ -29,7 +29,7 @@ async function validateAccess(req, res, next) {
         ));
       }
       
-      if (req.user.appId !== appId) {
+      if (req.auth.appId !== appId) {
         return res.status(403).json(errorResponse(
           'Access forbidden',
           'User does not have access to this app',
