@@ -11,6 +11,7 @@ const {
   handleSubscriptionTrialWillEnd,
   handleInvoicePaymentSucceeded,
   handleInvoicePaymentFailed,
+  handlePaymentIntentCreated,
   handlePaymentIntentSucceeded,
   handlePaymentIntentPaymentFailed,
   handleChargeSucceeded,
@@ -66,6 +67,10 @@ const webhookHandler = async (req, res) => {
         break;
 
       // Payment events (for app_user_payments table)
+      case 'payment_intent.created':
+        await handlePaymentIntentCreated(event.data.object, connectedAccountId);
+        break;
+
       case 'payment_intent.succeeded':
         await handlePaymentIntentSucceeded(event.data.object, connectedAccountId);
         break;

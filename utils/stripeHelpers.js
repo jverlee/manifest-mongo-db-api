@@ -69,7 +69,26 @@ async function handleSubscriptionCreated(subscription, connectedAccountId) {
   console.log('📝 DATA TO INSERT - app_user_subscriptions:');
   console.log(JSON.stringify(subscriptionData, null, 2));
 
-  // TODO: Insert into app_user_subscriptions table
+  // Upsert into app_user_subscriptions table
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_subscriptions')
+      .upsert(subscriptionData, {
+        onConflict: 'stripe_subscription_id',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Failed to upsert subscription:', error);
+      throw error;
+    }
+    
+    console.log('✅ Successfully upserted subscription:', data.id);
+  } catch (error) {
+    console.error('❌ Database error upserting subscription:', error);
+  }
 }
 
 async function handleSubscriptionUpdated(subscription, connectedAccountId) {
@@ -103,7 +122,30 @@ async function handleSubscriptionUpdated(subscription, connectedAccountId) {
   console.log(JSON.stringify(subscriptionUpdateData, null, 2));
   console.log('Previous attributes:', subscription.previous_attributes);
 
-  // TODO: Update app_user_subscriptions table
+  // Upsert app_user_subscriptions table
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_subscriptions')
+      .upsert({
+        ...subscriptionUpdateData,
+        app_id: appId,
+        app_user_id: appUserId
+      }, {
+        onConflict: 'stripe_subscription_id',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Failed to upsert subscription:', error);
+      throw error;
+    }
+    
+    console.log('✅ Successfully upserted subscription:', data.id);
+  } catch (error) {
+    console.error('❌ Database error upserting subscription:', error);
+  }
 }
 
 async function handleSubscriptionDeleted(subscription, connectedAccountId) {
@@ -126,7 +168,30 @@ async function handleSubscriptionDeleted(subscription, connectedAccountId) {
   console.log('📝 DATA TO UPDATE - app_user_subscriptions (DELETE EVENT - WHERE stripe_subscription_id = ${subscriptionDeleteData.stripe_subscription_id}):');
   console.log(JSON.stringify(subscriptionDeleteData, null, 2));
 
-  // TODO: Update app_user_subscriptions table status to canceled
+  // Upsert app_user_subscriptions table status to canceled
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_subscriptions')
+      .upsert({
+        ...subscriptionDeleteData,
+        app_id: appId,
+        app_user_id: appUserId
+      }, {
+        onConflict: 'stripe_subscription_id',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Failed to upsert canceled subscription:', error);
+      throw error;
+    }
+    
+    console.log('✅ Successfully upserted canceled subscription:', data.id);
+  } catch (error) {
+    console.error('❌ Database error upserting canceled subscription:', error);
+  }
 }
 
 async function handleInvoicePaymentSucceeded(invoice, connectedAccountId) {
@@ -189,17 +254,45 @@ async function handlePaymentIntentCreated(paymentIntent, connectedAccountId) {
     return;
   }
   
-  console.log('Payment intent created:', {
-    payment_intent_id: paymentIntent.id,
+  // Prepare data for app_user_payments table (created status)
+  const paymentData = {
+    stripe_account_id: connectedAccountId,
+    stripe_payment_intent_id: paymentIntent.id,
+    stripe_customer_id: paymentIntent.customer,
+    stripe_subscription_id: null,
     amount: paymentIntent.amount,
-    currency: paymentIntent.currency,
-    status: paymentIntent.status,
-    connected_account: connectedAccountId,
+    currency: paymentIntent.currency.toUpperCase(),
+    status: 'created', // Initial status
+    refunded: false,
+    refunded_amount: 0,
+    paid_at: null, // No payment date for created intents
     app_id: appId,
     app_user_id: appUserId
-  });
+  };
 
-  // TODO: Track payment intent creation for analytics
+  console.log('💳 DATA TO INSERT - app_user_payments (CREATED):');
+  console.log(JSON.stringify(paymentData, null, 2));
+
+  // Upsert payment intent creation into app_user_payments table
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_payments')
+      .upsert(paymentData, {
+        onConflict: 'stripe_payment_intent_id',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Failed to upsert payment intent:', error);
+      throw error;
+    }
+    
+    console.log('✅ Successfully upserted payment intent:', data.id);
+  } catch (error) {
+    console.error('❌ Database error upserting payment intent:', error);
+  }
 }
 
 async function handlePaymentIntentSucceeded(paymentIntent, connectedAccountId) {
@@ -219,7 +312,7 @@ async function handlePaymentIntentSucceeded(paymentIntent, connectedAccountId) {
     stripe_customer_id: paymentIntent.customer,
     stripe_subscription_id: null, // Will be set if this is part of subscription
     amount: paymentIntent.amount,
-    currency: paymentIntent.currency.toLowerCase(),
+    currency: paymentIntent.currency.toUpperCase(),
     status: 'succeeded',
     refunded: false,
     refunded_amount: 0,
@@ -233,7 +326,26 @@ async function handlePaymentIntentSucceeded(paymentIntent, connectedAccountId) {
   console.log('💳 DATA TO INSERT - app_user_payments:');
   console.log(JSON.stringify(paymentData, null, 2));
 
-  // TODO: Insert into app_user_payments table
+  // Upsert payment into app_user_payments table
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_payments')
+      .upsert(paymentData, {
+        onConflict: 'stripe_payment_intent_id',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Failed to upsert payment:', error);
+      throw error;
+    }
+    
+    console.log('✅ Successfully upserted payment:', data.id);
+  } catch (error) {
+    console.error('❌ Database error upserting payment:', error);
+  }
 }
 
 async function handleChargeSucceeded(charge, connectedAccountId) {
@@ -259,7 +371,27 @@ async function handleChargeSucceeded(charge, connectedAccountId) {
   console.log('💳 DATA TO UPDATE - app_user_payments (WHERE stripe_payment_intent_id = ${chargeData.stripe_payment_intent_id}):');
   console.log(JSON.stringify(chargeData, null, 2));
 
-  // TODO: Update app_user_payments table with charge details
+  // Update app_user_payments table with charge details (still use update since we only want to modify existing records)
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_payments')
+      .update(chargeData)
+      .eq('stripe_payment_intent_id', charge.payment_intent)
+      .select();
+
+    if (error) {
+      console.error('❌ Failed to update payment with charge details:', error);
+      throw error;
+    }
+    
+    if (data && data.length > 0) {
+      console.log('✅ Successfully updated payment with charge details:', data[0].id);
+    } else {
+      console.log('⚠️ No payment found to update for charge:', charge.payment_intent);
+    }
+  } catch (error) {
+    console.error('❌ Database error updating payment with charge details:', error);
+  }
 }
 
 async function handleChargeUpdated(charge, connectedAccountId) {
@@ -325,7 +457,7 @@ async function handlePaymentIntentPaymentFailed(paymentIntent, connectedAccountI
     stripe_customer_id: paymentIntent.customer,
     stripe_subscription_id: null,
     amount: paymentIntent.amount,
-    currency: paymentIntent.currency.toLowerCase(),
+    currency: paymentIntent.currency.toUpperCase(),
     status: 'failed',
     refunded: false,
     refunded_amount: 0,
@@ -338,7 +470,26 @@ async function handlePaymentIntentPaymentFailed(paymentIntent, connectedAccountI
   console.log(JSON.stringify(paymentData, null, 2));
   console.log('Failure reason:', paymentIntent.last_payment_error);
 
-  // TODO: Insert into app_user_payments table
+  // Upsert failed payment into app_user_payments table
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_payments')
+      .upsert(paymentData, {
+        onConflict: 'stripe_payment_intent_id',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Failed to upsert failed payment:', error);
+      throw error;
+    }
+    
+    console.log('✅ Successfully upserted failed payment:', data.id);
+  } catch (error) {
+    console.error('❌ Database error upserting failed payment:', error);
+  }
 }
 
 async function handleChargeDisputeCreated(dispute, connectedAccountId) {
@@ -387,7 +538,181 @@ async function handleChargeRefunded(charge, connectedAccountId) {
   console.log('🔄 DATA TO UPDATE - app_user_payments (REFUND - WHERE stripe_payment_intent_id = ${refundData.stripe_payment_intent_id}):');
   console.log(JSON.stringify(refundData, null, 2));
 
-  // TODO: Update app_user_payments table with refund details
+  // Update app_user_payments table with refund details (still use update since we only want to modify existing records)
+  try {
+    const { data, error } = await supabaseService.client
+      .from('app_user_payments')
+      .update(refundData)
+      .eq('stripe_payment_intent_id', charge.payment_intent)
+      .select();
+
+    if (error) {
+      console.error('❌ Failed to update payment with refund details:', error);
+      throw error;
+    }
+    
+    if (data && data.length > 0) {
+      console.log('✅ Successfully updated payment with refund details:', data[0].id);
+    } else {
+      console.log('⚠️ No payment found to update for refund:', charge.payment_intent);
+    }
+  } catch (error) {
+    console.error('❌ Database error updating payment with refund details:', error);
+  }
+}
+
+async function updateAppUserBillingStatus(appId) {
+  console.log(`🔄 Updating billing status for app: ${appId}`);
+  
+  try {
+    // Get all app users for this app
+    const { data: appUsers, error: usersError } = await supabaseService.client
+      .from('app_users')
+      .select('id, app_user_id')
+      .eq('app_id', appId);
+
+    if (usersError) {
+      console.error('❌ Failed to fetch app users:', usersError);
+      throw usersError;
+    }
+
+    if (!appUsers || appUsers.length === 0) {
+      console.log('ℹ️ No app users found for app:', appId);
+      return;
+    }
+
+    console.log(`📊 Processing ${appUsers.length} users for app: ${appId}`);
+
+    // Process each user
+    for (const user of appUsers) {
+      await updateSingleUserBillingStatus(appId, user.app_user_id);
+    }
+
+    console.log('✅ Successfully updated billing status for all users');
+  } catch (error) {
+    console.error('❌ Error updating app user billing status:', error);
+    throw error;
+  }
+}
+
+async function updateSingleUserBillingStatus(appId, appUserId) {
+  try {
+    // Get user's active subscriptions
+    const { data: subscriptions, error: subError } = await supabaseService.client
+      .from('app_user_subscriptions')
+      .select('*')
+      .eq('app_id', appId)
+      .eq('app_user_id', appUserId)
+      .order('current_period_end', { ascending: false });
+
+    if (subError) {
+      console.error('❌ Failed to fetch subscriptions:', subError);
+      throw subError;
+    }
+
+    // Get user's recent payments
+    const { data: payments, error: payError } = await supabaseService.client
+      .from('app_user_payments')
+      .select('*')
+      .eq('app_id', appId)
+      .eq('app_user_id', appUserId)
+      .order('paid_at', { ascending: false });
+
+    if (payError) {
+      console.error('❌ Failed to fetch payments:', payError);
+      throw payError;
+    }
+
+    let billingStatus = 'cancelled';
+    let accessUntil = null;
+    const now = new Date();
+
+    // Determine billing status and access period
+    if (subscriptions && subscriptions.length > 0) {
+      // Find the most relevant active subscription
+      const activeSubscription = subscriptions.find(sub => 
+        sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due'
+      ) || subscriptions[0]; // Fallback to most recent
+
+      if (activeSubscription) {
+        const periodEnd = new Date(activeSubscription.current_period_end);
+        const cancelAt = activeSubscription.cancel_at ? new Date(activeSubscription.cancel_at) : null;
+        const trialEnd = activeSubscription.trial_end ? new Date(activeSubscription.trial_end) : null;
+
+        // Determine billing status based on subscription status
+        switch (activeSubscription.status) {
+          case 'active':
+            billingStatus = 'current';
+            accessUntil = cancelAt && cancelAt < periodEnd ? cancelAt : periodEnd;
+            break;
+          case 'trialing':
+            billingStatus = 'current';
+            accessUntil = trialEnd || periodEnd;
+            break;
+          case 'past_due':
+            billingStatus = 'past_due';
+            // Give some grace period beyond period end for past due
+            accessUntil = new Date(periodEnd.getTime() + (7 * 24 * 60 * 60 * 1000)); // 7 days grace
+            break;
+          case 'canceled':
+          case 'incomplete':
+          case 'incomplete_expired':
+          case 'unpaid':
+            billingStatus = 'cancelled';
+            // Access until period end if not already expired
+            accessUntil = periodEnd > now ? periodEnd : now;
+            break;
+          default:
+            billingStatus = 'cancelled';
+            accessUntil = now;
+        }
+      }
+    }
+
+    // Check for one-time payments if no active subscription
+    if (billingStatus === 'cancelled' && payments && payments.length > 0) {
+      const successfulPayments = payments.filter(p => 
+        p.status === 'succeeded' && !p.refunded && p.paid_at
+      );
+
+      if (successfulPayments.length > 0) {
+        // For one-time payments, we might give access for a certain period
+        // This logic depends on your business model
+        const latestPayment = successfulPayments[0];
+        const paymentDate = new Date(latestPayment.paid_at);
+        
+        // Example: Give 30 days access from latest successful payment
+        const accessDuration = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+        const calculatedAccessUntil = new Date(paymentDate.getTime() + accessDuration);
+        
+        if (calculatedAccessUntil > now) {
+          billingStatus = 'current';
+          accessUntil = calculatedAccessUntil;
+        }
+      }
+    }
+
+    // Update the app_users table
+    const { error: updateError } = await supabaseService.client
+      .from('app_users')
+      .update({
+        billing_status: billingStatus,
+        access_until: accessUntil?.toISOString()
+      })
+      .eq('app_id', appId)
+      .eq('app_user_id', appUserId);
+
+    if (updateError) {
+      console.error('❌ Failed to update user billing status:', updateError);
+      throw updateError;
+    }
+
+    console.log(`✅ Updated user ${appUserId}: status=${billingStatus}, access_until=${accessUntil?.toISOString()}`);
+
+  } catch (error) {
+    console.error(`❌ Error updating billing status for user ${appUserId}:`, error);
+    throw error;
+  }
 }
 
 module.exports = {
@@ -399,9 +724,11 @@ module.exports = {
   handleSubscriptionTrialWillEnd,
   handleInvoicePaymentSucceeded,
   handleInvoicePaymentFailed,
+  handlePaymentIntentCreated,
   handlePaymentIntentSucceeded,
   handlePaymentIntentPaymentFailed,
   handleChargeSucceeded,
   handleChargeRefunded,
-  handleChargeDisputeCreated
+  handleChargeDisputeCreated,
+  updateAppUserBillingStatus
 };
