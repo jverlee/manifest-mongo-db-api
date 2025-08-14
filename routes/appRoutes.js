@@ -65,8 +65,8 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
     // Determine checkout mode based on price type
     const mode = price.recurring ? 'subscription' : 'payment';
 
-    // Create Stripe checkout session using the price ID
-    const session = await connectedStripe.checkout.sessions.create({
+    // Build checkout session parameters
+    const sessionParams = {
       payment_method_types: ['card'],
       mode: mode,
       line_items: [
@@ -81,7 +81,27 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
         manifest_app_id: appId,
         manifest_app_user_id: req.auth.appUserId
       }
-    });
+    };
+
+    // Attach metadata to the subscription or payment intent based on mode
+    if (mode === 'subscription') {
+      sessionParams.subscription_data = {
+        metadata: {
+          manifest_app_id: appId,
+          manifest_app_user_id: req.auth.appUserId
+        }
+      };
+    } else {
+      sessionParams.payment_intent_data = {
+        metadata: {
+          manifest_app_id: appId,
+          manifest_app_user_id: req.auth.appUserId
+        }
+      };
+    }
+
+    // Create Stripe checkout session
+    const session = await connectedStripe.checkout.sessions.create(sessionParams);
 
     // Redirect to Stripe Checkout
     res.redirect(session.url);
