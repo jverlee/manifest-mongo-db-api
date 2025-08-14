@@ -153,17 +153,25 @@ router.get('/stripe/prices', async (req, res) => {
     // Create Stripe instance for the connected account
     const connectedStripe = require('stripe')(stripeAccount.access_token);
     
-    // Get all products with the matching metadata
-    const products = await connectedStripe.products.list({
+    // Get all products with the matching metadata using async iteration
+    const appProducts = [];
+    
+    // Use async iteration to handle pagination automatically
+    for await (const product of connectedStripe.products.list({
       active: true,
+      limit: 100,
       expand: ['data.default_price']
-    });
-    
-    // Filter products that have the matching app metadata
-    const appProducts = products.data.filter(product => 
-      product.metadata && product.metadata.manifest_app_id === appId
-    );
-    
+    })) {
+      // Check if product has matching app metadata
+      if (product.metadata?.manifest_app_id === appId) {
+        appProducts.push(product);
+      }
+    }
+
+    console.log(`Found ${appProducts.length} products for app ${appId}`);
+
+
+    // If no products are found for this app, return an empty array
     if (appProducts.length === 0) {
       return res.json([]);
     }
@@ -226,9 +234,22 @@ router.get('/config', sessionService.attachUserFromSession, async (req, res) => 
 router.get('/me', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
   try {
     const { appId } = req.params;
-    
-    // Return user information from req.auth
-    res.json(req.auth);
+    const appUserId = req.auth.appUserId;
+
+    // lookup user from app_users where app_id = appId and app_user_id = appUserId
+    const user = await supabaseService.getAppUser(appId, appUserId);
+
+    res.json(
+      {
+        appId: appId,
+        appUserId: appUserId,
+        billingStatus: user.billing_status,
+        displayName: user.display_name,
+        email: user.primary_email
+      }
+    )
+
+
   } catch (error) {
     console.error('Error fetching user info:', error);
     res.status(500).json({

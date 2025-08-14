@@ -92,6 +92,28 @@ class SupabaseService {
       throw error;
     }
   }
+
+  async getAppUser(appId, appUserId) {
+    try {
+      console.log('searching by appId', appId, 'and appUserId', appUserId);
+      const { data, error } = await this.client
+        .from('app_users')
+        .select('*')
+        .eq('app_id', appId)
+        .eq('id', appUserId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching app user:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getAppUser:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new SupabaseService();
