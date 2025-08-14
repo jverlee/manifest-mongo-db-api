@@ -86,6 +86,9 @@ async function handleSubscriptionCreated(subscription, connectedAccountId) {
     }
     
     console.log('✅ Successfully upserted subscription:', data.id);
+    
+    // Update billing status for this user
+    await updateAppUserBillingStatus(appId, appUserId);
   } catch (error) {
     console.error('❌ Database error upserting subscription:', error);
   }
@@ -143,6 +146,9 @@ async function handleSubscriptionUpdated(subscription, connectedAccountId) {
     }
     
     console.log('✅ Successfully upserted subscription:', data.id);
+    
+    // Update billing status for this user
+    await updateAppUserBillingStatus(appId, appUserId);
   } catch (error) {
     console.error('❌ Database error upserting subscription:', error);
   }
@@ -189,6 +195,9 @@ async function handleSubscriptionDeleted(subscription, connectedAccountId) {
     }
     
     console.log('✅ Successfully upserted canceled subscription:', data.id);
+    
+    // Update billing status for this user
+    await updateAppUserBillingStatus(appId, appUserId);
   } catch (error) {
     console.error('❌ Database error upserting canceled subscription:', error);
   }
@@ -217,7 +226,8 @@ async function handleInvoicePaymentSucceeded(invoice, connectedAccountId) {
     app_user_id: appUserId
   });
 
-  // TODO: Extend subscription period, send receipt
+  // Update billing status for this user
+  await updateAppUserBillingStatus(appId, appUserId);
 }
 
 async function handleInvoicePaymentFailed(invoice, connectedAccountId) {
@@ -241,7 +251,8 @@ async function handleInvoicePaymentFailed(invoice, connectedAccountId) {
     app_user_id: appUserId
   });
 
-  // TODO: Notify user of failed payment, potentially suspend access
+  // Update billing status for this user
+  await updateAppUserBillingStatus(appId, appUserId);
 }
 
 async function handlePaymentIntentCreated(paymentIntent, connectedAccountId) {
@@ -343,6 +354,9 @@ async function handlePaymentIntentSucceeded(paymentIntent, connectedAccountId) {
     }
     
     console.log('✅ Successfully upserted payment:', data.id);
+    
+    // Update billing status for this user
+    await updateAppUserBillingStatus(appId, appUserId);
   } catch (error) {
     console.error('❌ Database error upserting payment:', error);
   }
@@ -561,41 +575,9 @@ async function handleChargeRefunded(charge, connectedAccountId) {
   }
 }
 
-async function updateAppUserBillingStatus(appId) {
-  console.log(`🔄 Updating billing status for app: ${appId}`);
-  
-  try {
-    // Get all app users for this app
-    const { data: appUsers, error: usersError } = await supabaseService.client
-      .from('app_users')
-      .select('id, app_user_id')
-      .eq('app_id', appId);
-
-    if (usersError) {
-      console.error('❌ Failed to fetch app users:', usersError);
-      throw usersError;
-    }
-
-    if (!appUsers || appUsers.length === 0) {
-      console.log('ℹ️ No app users found for app:', appId);
-      return;
-    }
-
-    console.log(`📊 Processing ${appUsers.length} users for app: ${appId}`);
-
-    // Process each user
-    for (const user of appUsers) {
-      await updateSingleUserBillingStatus(appId, user.app_user_id);
-    }
-
-    console.log('✅ Successfully updated billing status for all users');
-  } catch (error) {
-    console.error('❌ Error updating app user billing status:', error);
-    throw error;
-  }
-}
-
-async function updateSingleUserBillingStatus(appId, appUserId) {
+async function updateAppUserBillingStatus(appId, appUserId) {
+  console.log(`🔄 updateAppUserBillingStatus() called with appId: ${appId}, appUserId: ${appUserId}`);
+  console.log(`🔄 Updating billing status for user ${appUserId} in app: ${appId}`);
   try {
     // Get user's active subscriptions
     const { data: subscriptions, error: subError } = await supabaseService.client
@@ -700,7 +682,7 @@ async function updateSingleUserBillingStatus(appId, appUserId) {
         access_until: accessUntil?.toISOString()
       })
       .eq('app_id', appId)
-      .eq('app_user_id', appUserId);
+      .eq('id', appUserId);
 
     if (updateError) {
       console.error('❌ Failed to update user billing status:', updateError);
