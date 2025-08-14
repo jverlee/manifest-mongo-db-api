@@ -24,3 +24,47 @@ stripe trigger payment_intent.succeeded \
 --add "payment_intent:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
 --add "payment_intent:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
 --stripe-account acct_1Rv24TLuxP6zixJG
+
+#### For failed payment intents
+stripe trigger payment_intent.payment_failed \
+--add "payment_intent:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "payment_intent:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG
+
+#### For subscription events
+stripe trigger customer.subscription.created \
+--add "subscription:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "subscription:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG
+
+stripe trigger customer.subscription.updated \
+--add "subscription:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "subscription:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG
+
+stripe trigger customer.subscription.deleted \
+--add "subscription:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "subscription:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG
+
+stripe trigger customer.subscription.trial_will_end \
+--add "subscription:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "subscription:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG
+
+#### For invoice events
+stripe trigger invoice.payment_succeeded \
+--add "invoice:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "invoice:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG
+
+stripe trigger invoice.payment_failed \
+--add "invoice:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "invoice:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG
+
+#### For dispute events
+stripe trigger charge.dispute.created \
+--add "dispute:charge:metadata[manifest_app_id]=d7ba5756-d920-41f9-9c69-dd4c916c9fb2" \
+--add "dispute:charge:metadata[manifest_app_user_id]=3af93de6-6c8a-43ef-b690-5775243e9918" \
+--stripe-account acct_1Rv24TLuxP6zixJG

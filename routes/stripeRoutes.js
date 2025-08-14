@@ -8,12 +8,14 @@ const {
   handleSubscriptionCreated,
   handleSubscriptionUpdated,
   handleSubscriptionDeleted,
+  handleSubscriptionTrialWillEnd,
   handleInvoicePaymentSucceeded,
   handleInvoicePaymentFailed,
-  handlePaymentIntentCreated,
   handlePaymentIntentSucceeded,
+  handlePaymentIntentPaymentFailed,
   handleChargeSucceeded,
-  handleChargeUpdated
+  handleChargeRefunded,
+  handleChargeDisputeCreated
 } = require('../utils/stripeHelpers');
 
 // =============================================================================
@@ -46,12 +48,7 @@ const webhookHandler = async (req, res) => {
 
   try {
     switch (event.type) {
-      // Checkout events
-      case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object, connectedAccountId);
-        break;
-
-      // Subscription events
+      // Subscription events (for app_user_subscriptions table)
       case 'customer.subscription.created':
         await handleSubscriptionCreated(event.data.object, connectedAccountId);
         break;
@@ -64,30 +61,38 @@ const webhookHandler = async (req, res) => {
         await handleSubscriptionDeleted(event.data.object, connectedAccountId);
         break;
 
-      // Invoice events
-      case 'invoice.payment_succeeded':
-        await handleInvoicePaymentSucceeded(event.data.object, connectedAccountId);
+      case 'customer.subscription.trial_will_end':
+        await handleSubscriptionTrialWillEnd(event.data.object, connectedAccountId);
         break;
 
-      case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event.data.object, connectedAccountId);
-        break;
-
-      // Payment events
-      case 'payment_intent.created':
-        await handlePaymentIntentCreated(event.data.object, connectedAccountId);
-        break;
-
+      // Payment events (for app_user_payments table)
       case 'payment_intent.succeeded':
         await handlePaymentIntentSucceeded(event.data.object, connectedAccountId);
+        break;
+
+      case 'payment_intent.payment_failed':
+        await handlePaymentIntentPaymentFailed(event.data.object, connectedAccountId);
         break;
 
       case 'charge.succeeded':
         await handleChargeSucceeded(event.data.object, connectedAccountId);
         break;
 
-      case 'charge.updated':
-        await handleChargeUpdated(event.data.object, connectedAccountId);
+      case 'charge.refunded':
+        await handleChargeRefunded(event.data.object, connectedAccountId);
+        break;
+
+      case 'charge.dispute.created':
+        await handleChargeDisputeCreated(event.data.object, connectedAccountId);
+        break;
+
+      // Invoice events (for payment tracking)
+      case 'invoice.payment_succeeded':
+        await handleInvoicePaymentSucceeded(event.data.object, connectedAccountId);
+        break;
+
+      case 'invoice.payment_failed':
+        await handleInvoicePaymentFailed(event.data.object, connectedAccountId);
         break;
 
       default:
