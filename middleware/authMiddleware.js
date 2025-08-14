@@ -21,7 +21,7 @@ async function validateAccess(req, res, next) {
     
     // Check monetization requirements
     if (appConfig.monetization?.type === 'login_required') {
-      if (!req.auth || !req.auth.endUserId) {
+      if (!req.auth || !req.auth.appUserId) {
         return res.status(401).json(errorResponse(
           'Authentication required',
           'This app requires user authentication',

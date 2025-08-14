@@ -12,7 +12,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.ST
 // =============================================================================
 
 // GET /apps/:appId/stripe/checkout/prices/:priceId - Create a checkout session and redirect to Stripe Checkout
-router.get('/stripe/checkout/prices/:priceId', async (req, res) => {
+router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
   try {
     const { appId, priceId } = req.params;
     
@@ -77,6 +77,10 @@ router.get('/stripe/checkout/prices/:priceId', async (req, res) => {
       ],
       success_url: `${req.protocol}://${req.get('host')}/stripe/success?session_id={CHECKOUT_SESSION_ID}&app_id=${appId}`,
       //cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel?app_id=${appId}`,
+      metadata: {
+        manifest_app_id: appId,
+        manifest_app_user_id: req.auth.appUserId
+      }
     });
 
     // Redirect to Stripe Checkout
@@ -91,7 +95,7 @@ router.get('/stripe/checkout/prices/:priceId', async (req, res) => {
 router.get('/stripe/portal', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
   try {
     const { appId } = req.params;
-    const userId = req.auth.endUserId;
+    const userId = req.auth.appUserId;
     
     // Get Stripe account details from Supabase
     const stripeAccount = await supabaseService.getStripeAccount(appId);

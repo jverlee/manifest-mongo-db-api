@@ -47,7 +47,7 @@ async function getAppContext(req) {
   return { appId, cookieDomain };
 }
 
-async function createSession(appId, endUserId, req) {
+async function createSession(appId, appUserId, req) {
   const raw = createRawToken();
   const tokenHash = hashToken(raw);
   const hours = Number(process.env.SESSION_TTL_HOURS) || 720;
@@ -55,7 +55,7 @@ async function createSession(appId, endUserId, req) {
   
   console.log('[SESSION DEBUG] Creating new session:', {
     appId,
-    endUserId,
+    appUserId,
     tokenPreview: raw.substring(0, 8) + '...',
     tokenHashPreview: tokenHash.substring(0, 8) + '...',
     ttlHours: hours,
@@ -65,10 +65,10 @@ async function createSession(appId, endUserId, req) {
   });
   
   const { data, error } = await supabaseService.client
-    .from('end_user_sessions')
+    .from('app_user_sessions')
     .insert({
       app_id: appId,
-      end_user_id: endUserId,
+      app_user_id: appUserId,
       token_hash: tokenHash,
       issued_at: new Date().toISOString(),
       expires_at: expiresAt,
@@ -94,7 +94,7 @@ async function createSession(appId, endUserId, req) {
 
 async function deleteSession(appId, tokenHash) {
   const { error } = await supabaseService.client
-    .from('end_user_sessions')
+    .from('app_user_sessions')
     .delete()
     .eq('app_id', appId)
     .eq('token_hash', tokenHash);
@@ -104,12 +104,12 @@ async function deleteSession(appId, tokenHash) {
   }
 }
 
-async function deleteAllSessionsForUser(appId, endUserId) {
+async function deleteAllSessionsForUser(appId, appUserId) {
   const { error } = await supabaseService.client
-    .from('end_user_sessions')
+    .from('app_user_sessions')
     .delete()
     .eq('app_id', appId)
-    .eq('end_user_id', endUserId);
+    .eq('app_user_id', appUserId);
     
   if (error) {
     console.error('Error deleting all sessions for user:', error);
@@ -165,7 +165,7 @@ async function attachUserFromSession(req, res, next) {
         console.log('[SESSION DEBUG] Found valid session using fallback cookie');
         req.auth = { 
           appId: sessionData.app_id, 
-          endUserId: sessionData.end_user_id, 
+          appUserId: sessionData.app_user_id, 
           tokenHash: hashToken(cookies[fallbackName]),
           cookieName: fallbackName 
         };
@@ -181,7 +181,7 @@ async function attachUserFromSession(req, res, next) {
           console.log('[SESSION DEBUG] Found valid session using per-app cookie:', cookieName);
           req.auth = { 
             appId: sessionData.app_id, 
-            endUserId: sessionData.end_user_id, 
+            appUserId: sessionData.app_user_id, 
             tokenHash: hashToken(cookieValue),
             cookieName 
           };
@@ -211,8 +211,8 @@ async function validateSessionForApp(req, res, next, appId, rawToken, cookieName
     const now = new Date().toISOString();
     
     const { data, error } = await supabaseService.client
-      .from('end_user_sessions')
-      .select('end_user_id, expires_at, issued_at, app_id')
+      .from('app_user_sessions')
+      .select('app_user_id, expires_at, issued_at, app_id')
       .eq('app_id', appId)
       .eq('token_hash', tokenHash)
       .gt('expires_at', now)
@@ -222,7 +222,7 @@ async function validateSessionForApp(req, res, next, appId, rawToken, cookieName
     if (!error && data) {
       console.log('[SESSION DEBUG] Session found and valid for app:', {
         appId: data.app_id,
-        endUserId: data.end_user_id,
+        appUserId: data.app_user_id,
         expiresAt: data.expires_at,
         issuedAt: data.issued_at
       });
@@ -233,7 +233,7 @@ async function validateSessionForApp(req, res, next, appId, rawToken, cookieName
         return next();
       }
       
-      req.auth = { appId, endUserId: data.end_user_id, tokenHash, cookieName };
+      req.auth = { appId, appUserId: data.app_user_id, tokenHash, cookieName };
     } else if (error) {
       console.log('[SESSION DEBUG] Session lookup failed:', {
         error: error.message,
@@ -255,8 +255,8 @@ async function findSessionByToken(rawToken) {
     const now = new Date().toISOString();
     
     const { data, error } = await supabaseService.client
-      .from('end_user_sessions')
-      .select('app_id, end_user_id, expires_at')
+      .from('app_user_sessions')
+      .select('app_id, app_user_id, expires_at')
       .eq('token_hash', tokenHash)
       .gt('expires_at', now)
       .limit(1)
@@ -274,7 +274,7 @@ function requireAuth(req, res, next) {
     hasAuth: !!req.auth,
     authDetails: req.auth ? {
       appId: req.auth.appId,
-      endUserId: req.auth.endUserId,
+      appUserId: req.auth.appUserId,
       cookieName: req.auth.cookieName
     } : null,
     url: req.url,

@@ -21,6 +21,17 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
+// Stripe webhook route MUST be defined BEFORE any body parsing middleware
+// to preserve raw body for signature verification
+const stripeWebhookHandler = require('./routes/stripeRoutes').webhookHandler;
+app.post('/stripe/webhook', 
+  express.raw({ 
+    type: 'application/json',
+    limit: '10mb' // Increase limit if needed for large webhook payloads
+  }), 
+  stripeWebhookHandler
+);
+
 // Cookie and session middleware  
 const isProduction = process.env.NODE_ENV === 'production';
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
@@ -35,12 +46,6 @@ app.use(passport.initialize());
 
 // Attach user from session middleware - only for routes that need it
 // app.use(sessionService.attachUserFromSession);
-
-// Stripe webhook route MUST be defined BEFORE express.json() middleware
-// to preserve raw body for signature verification
-// We need to handle this separately because it needs raw body parsing
-const stripeWebhookHandler = require('./routes/stripeRoutes').webhookHandler;
-app.post('/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);
 
 // Other body parser middleware (AFTER webhook route)
 app.use(express.json());

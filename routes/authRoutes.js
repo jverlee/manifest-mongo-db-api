@@ -76,22 +76,22 @@ router.get('/google/callback',
 
       // First, check if this identity already exists (dedupe by identity, not email)
       const { data: existingIdentity } = await supabaseService.client
-        .from('end_user_identities')
-        .select('end_user_id')
+        .from('app_user_identities')
+        .select('app_user_id')
         .eq('app_id', appId)
         .eq('provider', 'google')
         .eq('provider_user_id', providerUserId)
         .single();
 
-      let endUserId;
+      let appUserId;
       
       if (existingIdentity) {
         // Identity exists, use the existing user
-        endUserId = existingIdentity.end_user_id;
+        appUserId = existingIdentity.app_user_id;
       } else {
         // New identity, create a new user
         const { data: newUser, error: userError } = await supabaseService.client
-          .from('end_users')
+          .from('app_users')
           .insert({
             app_id: appId,
             display_name: name,
@@ -105,15 +105,15 @@ router.get('/google/callback',
           throw new Error(`Failed to create user: ${userError.message}`);
         }
         
-        endUserId = newUser.id;
+        appUserId = newUser.id;
       }
 
       // Upsert identity using the unique constraint uq_identity_per_app (app_id, provider, provider_user_id)
       const { data: identity, error: identityError } = await supabaseService.client
-        .from('end_user_identities')
+        .from('app_user_identities')
         .upsert({
           app_id: appId,
-          end_user_id: endUserId,
+          app_user_id: appUserId,
           provider: 'google',
           provider_user_id: providerUserId,
           email,
@@ -125,7 +125,7 @@ router.get('/google/callback',
         }, {
           onConflict: 'app_id,provider,provider_user_id'
         })
-        .select('end_user_id')
+        .select('app_user_id')
         .single();
 
       if (identityError) {
@@ -133,7 +133,7 @@ router.get('/google/callback',
         throw new Error(`Failed to create/update identity: ${identityError.message}`);
       }
 
-      const finalUserId = identity.end_user_id;
+      const finalUserId = identity.app_user_id;
 
       // Create session + cookie
       const { rawToken } = await sessionService.createSession(appId, finalUserId, req);
@@ -176,7 +176,7 @@ router.post('/:appId/password/signup', async (req, res, next) => {
 
     // Create/ensure end_user
     const { data: endUser, error: userError } = await supabaseService.client
-      .from('end_users')
+      .from('app_users')
       .insert({
         app_id: appId,
         display_name: displayName || null,
@@ -186,41 +186,41 @@ router.post('/:appId/password/signup', async (req, res, next) => {
       .select('id')
       .single();
 
-    let endUserId;
+    let appUserId;
     if (userError) {
       if (userError.code === '23505') {
         // User already exists, get their ID
         const { data: existingUser } = await supabaseService.client
-          .from('end_users')
+          .from('app_users')
           .select('id')
           .eq('app_id', appId)
           .eq('primary_email', email.toLowerCase())
           .single();
-        endUserId = existingUser?.id;
+        appUserId = existingUser?.id;
       } else {
         throw new Error(`Failed to create user: ${userError.message}`);
       }
     } else {
-      endUserId = endUser.id;
+      appUserId = endUser.id;
     }
 
-    if (!endUserId) {
+    if (!appUserId) {
       throw new Error('Failed to create or find user');
     }
 
     // Create identity
     const { data: identity, error: identityError } = await supabaseService.client
-      .from('end_user_identities')
+      .from('app_user_identities')
       .insert({
         app_id: appId,
-        end_user_id: endUserId,
+        app_user_id: appUserId,
         provider: 'password',
         provider_user_id: null,
         email: email.toLowerCase(),
         email_verified: false,
         last_login_at: new Date().toISOString()
       })
-      .select('id, end_user_id')
+      .select('id, app_user_id')
       .single();
 
     if (identityError) {
@@ -233,7 +233,7 @@ router.post('/:appId/password/signup', async (req, res, next) => {
     // Store password hash
     const hash = await argon2.hash(password, { type: argon2.argon2id });
     const { error: passwordError } = await supabaseService.client
-      .from('end_user_password_credentials')
+      .from('app_user_password_credentials')
       .insert({
         identity_id: identity.id,
         password_hash: hash
@@ -244,7 +244,7 @@ router.post('/:appId/password/signup', async (req, res, next) => {
     }
 
     // Create session + cookie
-    const { rawToken } = await sessionService.createSession(appId, endUserId, req);
+    const { rawToken } = await sessionService.createSession(appId, appUserId, req);
     res.cookie(
       sessionService.cookieNameFor(appId), 
       rawToken, 
@@ -269,11 +269,11 @@ router.post('/:appId/password/login', async (req, res, next) => {
     }
 
     const { data, error } = await supabaseService.client
-      .from('end_user_identities')
+      .from('app_user_identities')
       .select(`
         id,
-        end_user_id,
-        end_user_password_credentials (
+        app_user_id,
+        app_user_password_credentials (
           password_hash
         )
       `)
@@ -282,12 +282,12 @@ router.post('/:appId/password/login', async (req, res, next) => {
       .eq('email', email.toLowerCase())
       .single();
 
-    if (error || !data || !data.end_user_password_credentials?.password_hash) {
+    if (error || !data || !data.app_user_password_credentials?.password_hash) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    const { end_user_id, end_user_password_credentials } = data;
-    const passwordHash = end_user_password_credentials.password_hash;
+    const { app_user_id, app_user_password_credentials } = data;
+    const passwordHash = app_user_password_credentials.password_hash;
     
     const validPassword = await argon2.verify(passwordHash, password);
     if (!validPassword) {
@@ -296,12 +296,12 @@ router.post('/:appId/password/login', async (req, res, next) => {
 
     // Update last login
     await supabaseService.client
-      .from('end_user_identities')
+      .from('app_user_identities')
       .update({ last_login_at: new Date().toISOString() })
       .eq('id', data.id);
 
     // Create session + cookie
-    const { rawToken } = await sessionService.createSession(appId, end_user_id, req);
+    const { rawToken } = await sessionService.createSession(appId, app_user_id, req);
     res.cookie(
       sessionService.cookieNameFor(appId), 
       rawToken, 
@@ -318,7 +318,7 @@ router.post('/:appId/password/login', async (req, res, next) => {
 router.get('/apps/:appId/me', sessionService.requireAuth, async (req, res, next) => {
   try {
     const requestedAppId = req.params.appId;
-    const { appId: sessionAppId, endUserId } = req.auth;
+    const { appId: sessionAppId, appUserId } = req.auth;
     
     // Validate that the session is for the requested app
     if (requestedAppId !== sessionAppId) {
@@ -338,10 +338,10 @@ router.get('/apps/:appId/me', sessionService.requireAuth, async (req, res, next)
     }
     
     const { data, error } = await supabaseService.client
-      .from('end_users')
+      .from('app_users')
       .select('id, app_id, display_name, primary_email, email_verified, created_at')
       .eq('app_id', requestedAppId)
-      .eq('id', endUserId)
+      .eq('id', appUserId)
       .single();
 
     if (error) {

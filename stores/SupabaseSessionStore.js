@@ -4,7 +4,7 @@ class SupabaseSessionStore extends Store {
   constructor(options = {}) {
     super(options);
     this.client = options.client;
-    this.tableName = options.tableName || 'end_user_sessions';
+    this.tableName = options.tableName || 'app_user_sessions';
     this.ttl = options.ttl || 86400; // 24 hours in seconds
   }
 
