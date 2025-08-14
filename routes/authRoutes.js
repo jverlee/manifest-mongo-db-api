@@ -22,7 +22,7 @@ router.get('/google', async (req, res, next) => {
   const config = await supabaseService.getAppConfig(appId);
 
   // if config.monetization.type is not 'login_required', return error
-  if (config.monetization.type !== 'login_required') {
+  if (config.monetization.type !== 'login_required' && config.monetization.type !== 'payment_required') {
     return res.status(403).json({
       success: false,
       message: 'This app is not configured to allow login'

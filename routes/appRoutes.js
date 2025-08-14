@@ -76,7 +76,7 @@ router.get('/stripe/checkout/prices/:priceId', async (req, res) => {
         },
       ],
       success_url: `${req.protocol}://${req.get('host')}/stripe/success?session_id={CHECKOUT_SESSION_ID}&app_id=${appId}`,
-      cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel?app_id=${appId}`,
+      //cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel?app_id=${appId}`,
     });
 
     // Redirect to Stripe Checkout
@@ -161,7 +161,7 @@ router.get('/stripe/prices', async (req, res) => {
     );
     
     if (appProducts.length === 0) {
-      return res.json(createResponse([], 0, appId, 'prices'));
+      return res.json([]);
     }
     
     // Get all prices for these products
@@ -187,7 +187,7 @@ router.get('/stripe/prices', async (req, res) => {
       allPrices.push(...pricesWithProduct);
     }
     
-    res.json(createResponse(allPrices, allPrices.length, appId, 'prices'));
+    res.json(allPrices);
   } catch (error) {
     console.error('Error fetching Stripe prices:', error);
     res.status(500).json(errorResponse(error, 'Failed to fetch prices'));
