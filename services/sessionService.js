@@ -53,16 +53,6 @@ async function createSession(appId, appUserId, req) {
   const hours = Number(process.env.SESSION_TTL_HOURS) || 720;
   const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
   
-  console.log('[SESSION DEBUG] Creating new session:', {
-    appId,
-    appUserId,
-    tokenPreview: raw.substring(0, 8) + '...',
-    tokenHashPreview: tokenHash.substring(0, 8) + '...',
-    ttlHours: hours,
-    expiresAt,
-    ip: req.ip,
-    userAgent: req.get('user-agent')
-  });
   
   const { data, error } = await supabaseService.client
     .from('app_user_sessions')
@@ -80,14 +70,10 @@ async function createSession(appId, appUserId, req) {
     .single();
   
   if (error) {
-    console.error('[SESSION DEBUG] Failed to create session:', error);
+    console.error('Failed to create session:', error);
     throw new Error(`Failed to create session: ${error.message}`);
   }
   
-  console.log('[SESSION DEBUG] Session created successfully:', {
-    sessionId: data.id,
-    cookieName: cookieNameFor(appId)
-  });
   
   return { rawToken: raw, sessionId: data.id, expiresAt: data.expires_at };
 }
@@ -120,28 +106,16 @@ async function attachUserFromSession(req, res, next) {
   try {
     const routeAppId = req.params.appId;
 
-    console.log('req.params', req.params);
-    console.log('req.auth', req.auth);
-    console.log('req.cookies', req.cookies);
-    console.log('req.headers.cookie', req.headers.cookie);
     
     // If route has appId, only check that specific app's cookie
     if (routeAppId) {
       const name = cookieNameFor(routeAppId);
       const fallbackName = process.env.SESSION_COOKIE_NAME || 'sid';
       
-      console.log('[SESSION DEBUG] Route has appId, checking specific cookie:', {
-        routeAppId,
-        expectedCookieName: name,
-        fallbackCookieName: fallbackName,
-        availableCookies: Object.keys(req.cookies || {}),
-        path: req.path
-      });
       
       const raw = req.cookies?.[name] || req.cookies?.[fallbackName];
       
       if (!raw) {
-        console.log('[SESSION DEBUG] No session cookie found for route appId');
         return next();
       }
       
@@ -153,16 +127,11 @@ async function attachUserFromSession(req, res, next) {
     const cookies = req.cookies || {};
     const fallbackName = process.env.SESSION_COOKIE_NAME || 'sid';
     
-    console.log('[SESSION DEBUG] No route appId, checking all possible app cookies:', {
-      availableCookies: Object.keys(cookies),
-      path: req.path
-    });
     
     // First try the fallback cookie (old global sessions)
     if (cookies[fallbackName]) {
       const sessionData = await findSessionByToken(cookies[fallbackName]);
       if (sessionData) {
-        console.log('[SESSION DEBUG] Found valid session using fallback cookie');
         req.auth = { 
           appId: sessionData.app_id, 
           appUserId: sessionData.app_user_id, 
@@ -178,7 +147,6 @@ async function attachUserFromSession(req, res, next) {
       if (cookieName.startsWith('sid_')) {
         const sessionData = await findSessionByToken(cookieValue);
         if (sessionData) {
-          console.log('[SESSION DEBUG] Found valid session using per-app cookie:', cookieName);
           req.auth = { 
             appId: sessionData.app_id, 
             appUserId: sessionData.app_user_id, 
@@ -190,22 +158,15 @@ async function attachUserFromSession(req, res, next) {
       }
     }
     
-    console.log('[SESSION DEBUG] No valid session found in any cookie');
     return next();
   } catch (e) {
-    console.error('[SESSION DEBUG] Exception in attachUserFromSession:', e);
+    console.error('Exception in attachUserFromSession:', e);
     return next(e);
   }
 }
 
 async function validateSessionForApp(req, res, next, appId, rawToken, cookieName, fallbackName) {
   try {
-    console.log('[SESSION DEBUG] Validating session for specific app:', {
-      appId,
-      cookieUsed: req.cookies?.[cookieName] ? cookieName : fallbackName,
-      tokenLength: rawToken.length,
-      tokenPreview: rawToken.substring(0, 8) + '...'
-    });
     
     const tokenHash = hashToken(rawToken);
     const now = new Date().toISOString();
@@ -220,31 +181,19 @@ async function validateSessionForApp(req, res, next, appId, rawToken, cookieName
       .single();
     
     if (!error && data) {
-      console.log('[SESSION DEBUG] Session found and valid for app:', {
-        appId: data.app_id,
-        appUserId: data.app_user_id,
-        expiresAt: data.expires_at,
-        issuedAt: data.issued_at
-      });
       
       // Security: Verify the session actually belongs to the requested app
       if (data.app_id !== appId) {
-        console.log('[SESSION DEBUG] Security violation: session app_id does not match route appId');
         return next();
       }
       
       req.auth = { appId, appUserId: data.app_user_id, tokenHash, cookieName };
     } else if (error) {
-      console.log('[SESSION DEBUG] Session lookup failed:', {
-        error: error.message,
-        code: error.code,
-        details: error.details
-      });
     }
     
     return next();
   } catch (e) {
-    console.error('[SESSION DEBUG] Exception in validateSessionForApp:', e);
+    console.error('Exception in validateSessionForApp:', e);
     return next(e);
   }
 }
@@ -264,29 +213,17 @@ async function findSessionByToken(rawToken) {
     
     return (!error && data) ? data : null;
   } catch (e) {
-    console.error('[SESSION DEBUG] Error in findSessionByToken:', e);
+    console.error('Error in findSessionByToken:', e);
     return null;
   }
 }
 
 function requireAuth(req, res, next) {
-  console.log('[SESSION DEBUG] Auth check:', {
-    hasAuth: !!req.auth,
-    authDetails: req.auth ? {
-      appId: req.auth.appId,
-      appUserId: req.auth.appUserId,
-      cookieName: req.auth.cookieName
-    } : null,
-    url: req.url,
-    method: req.method
-  });
   
   if (!req.auth) {
-    console.log('[SESSION DEBUG] Auth required but not found - returning 401');
     return res.status(401).json({ error: 'unauthorized' });
   }
   
-  console.log('[SESSION DEBUG] Auth check passed');
   return next();
 }
 

@@ -156,7 +156,7 @@ router.get('/google/callback',
         cookieOptions
       );
       
-      res.redirect(`${redirectUrl}?login=success`);
+      res.redirect(`${redirectUrl}`);
     } catch (error) {
       console.error('OAuth callback error:', error);
       return next(error);

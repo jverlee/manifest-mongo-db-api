@@ -15,6 +15,10 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.ST
 router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
   try {
     const { appId, priceId } = req.params;
+
+    // successUrl from query params
+    const successUrl = req.query.successUrl;
+    const cancelUrl = req.query.cancelUrl;
     
     // Get Stripe account details from Supabase
     const stripeAccount = await supabaseService.getStripeAccount(appId);
@@ -75,8 +79,9 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
           quantity: 1,
         },
       ],
-      success_url: `${req.protocol}://${req.get('host')}/stripe/success?session_id={CHECKOUT_SESSION_ID}&app_id=${appId}`,
-      //cancel_url: `${req.protocol}://${req.get('host')}/stripe/cancel?app_id=${appId}`,
+      success_url: `${req.protocol}://${req.get('host')}/apps/${appId}/stripe/checkout/verify?forwardUrl=${encodeURIComponent(successUrl || 'https://app.madewithmanifest.com/')}&session_id={CHECKOUT_SESSION_ID}`,
+      // cancel url intentionally not set to simplify code - users can use the back button
+      //cancel_url: cancelUrl ? `${req.protocol}://${req.get('host')}/apps/${appId}/stripe/checkout/cancel?forwardUrl=${encodeURIComponent(cancelUrl)}` : null,
       metadata: {
         manifest_app_id: appId,
         manifest_app_user_id: req.auth.appUserId
@@ -152,6 +157,88 @@ router.get('/stripe/portal', sessionService.attachUserFromSession, requireAuth, 
     console.error('Error creating customer portal session:', error);
     res.status(500).json(errorResponse(error, 'Failed to create customer portal session'));
   }
+});
+
+// GET /apps/:appId/stripe/verify - Handle successful payment and verify webhook updates before forwarding on
+router.get('/stripe/checkout/verify', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
+  const { forwardUrl } = req.query;
+  const redirectUrl = forwardUrl || '/';
+
+  if (!req.auth) {
+    return res.status(401).send('Transaction could not be completed');
+  }
+
+  const { appId, appUserId } = req.auth;
+  const maxRetries = 10; // 10 seconds total (10 x 1 second)
+  let retryCount = 0;
+
+  // Function to check billing status with retries
+  const checkBillingStatus = async () => {
+    try {
+      const userDetails = await supabaseService.getAppUser(appId, appUserId);
+      
+      if (userDetails.billing_status === 'current') {
+        // Success - redirect immediately
+        return res.redirect(redirectUrl);
+      }
+      
+      // If not ready yet and we haven't exceeded max retries
+      if (retryCount < maxRetries) {
+        retryCount++;
+        // Wait 1 second and try again
+        setTimeout(checkBillingStatus, 1000);
+      } else {
+        // Timeout - show error message
+        res.status(400).send('Transaction could not be completed');
+      }
+    } catch (error) {
+      console.error('Error checking billing status:', error);
+      res.status(500).send('Transaction could not be completed');
+    }
+  };
+
+  // Start checking
+  checkBillingStatus();
+});
+
+// GET /apps/:appId/stripe/cancel - Handle cancelled payment
+router.get('/stripe/checkout/cancel', sessionService.attachUserFromSession, async (req, res) => {
+  const { forwardUrl } = req.query;
+  const redirectUrl = forwardUrl || '/';
+  
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Verifying Cancellation</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: #f5f5f5;
+        }
+        h1 {
+          color: #333;
+          font-size: 48px;
+          font-weight: 300;
+        }
+      </style>
+      <script>
+        setTimeout(function() {
+          window.location.href = '${redirectUrl}';
+        }, 5000);
+      </script>
+    </head>
+    <body>
+      <h1>Verifying</h1>
+    </body>
+    </html>
+  `);
 });
 
 // GET /apps/:appId/stripe/prices - Get all active prices for an app
