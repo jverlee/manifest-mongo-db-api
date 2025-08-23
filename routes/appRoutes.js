@@ -6,6 +6,7 @@ const sessionService = require('../services/sessionService');
 const { validateAccess, requireAuth } = require('../middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('../utils/responseUtils');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_CLIENT_SECRET);
+const supabaseUtils = require('../utils/supabaseUtils');
 
 // =============================================================================
 // STRIPE ROUTES
@@ -390,6 +391,92 @@ router.post('/logout', sessionService.attachUserFromSession, requireAuth, async 
 // =============================================================================
 // BACKEND FUNCTIONS
 // =============================================================================
+
+// Proxy all requests to backend functions
+router.all('/backend-functions/:functionName', sessionService.attachUserFromSession, validateAccess, async (req, res) => {
+  try {
+    const { appId, functionName } = req.params;
+    
+    // Get the backend function URL from Supabase
+    const backendUrl = await supabaseUtils.getBackendFunctionUrl(appId, functionName);
+    
+    // Prepare fetch options
+    const fetchOptions = {
+      method: req.method,
+      headers: {
+        ...req.headers,
+        // Remove host header to avoid issues
+        host: undefined,
+        // Forward original host as custom header if needed
+        'x-forwarded-host': req.headers.host,
+        'x-forwarded-for': req.ip,
+        'x-original-url': req.originalUrl
+      }
+    };
+    
+    // Add body for methods that support it
+    if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
+      if (req.headers['content-type']?.includes('application/json')) {
+        fetchOptions.body = JSON.stringify(req.body);
+      } else {
+        // For non-JSON content types, send raw body if available
+        fetchOptions.body = req.body;
+      }
+    }
+    
+    // Make the request to the backend function
+    const response = await fetch(backendUrl, fetchOptions);
+    
+    // Copy response headers
+    const responseHeaders = {};
+    response.headers.forEach((value, key) => {
+      // Skip certain headers that shouldn't be forwarded
+      if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
+        responseHeaders[key] = value;
+      }
+    });
+    
+    // Set response headers
+    Object.entries(responseHeaders).forEach(([key, value]) => {
+      res.setHeader(key, value);
+    });
+    
+    // Set status code
+    res.status(response.status);
+    
+    // Stream the response body
+    const responseBody = await response.text();
+    
+    // Try to parse as JSON if content-type indicates it
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      try {
+        res.json(JSON.parse(responseBody));
+      } catch {
+        // If parsing fails, send as text
+        res.send(responseBody);
+      }
+    } else {
+      res.send(responseBody);
+    }
+    
+  } catch (error) {
+    console.error('Error proxying backend function:', error);
+    
+    if (error.message?.includes('not found')) {
+      res.status(404).json(errorResponse(
+        'Backend function not found',
+        `The backend function '${req.params.functionName}' is not configured for this app`,
+        404
+      ));
+    } else {
+      res.status(500).json(errorResponse(
+        error,
+        'Failed to execute backend function',
+        500
+      ));
+    }
+  }
+});
 
 
 
