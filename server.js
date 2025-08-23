@@ -93,7 +93,7 @@ app.get('/health', (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'MongoDB API Server',
+    message: 'App Backend API Server',
     version: '1.0.0',
     endpoints: {
       health: '/health',

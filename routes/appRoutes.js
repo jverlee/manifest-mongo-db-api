@@ -118,6 +118,10 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
 
 // GET /apps/:appId/stripe/portal - Create customer portal session
 router.get('/stripe/portal', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
+  
+  // get returnUrl from query params
+  const returnUrl = req.query.returnUrl;
+  
   try {
     const { appId } = req.params;
     const userId = req.auth.appUserId;
@@ -134,9 +138,9 @@ router.get('/stripe/portal', sessionService.attachUserFromSession, requireAuth, 
     }
 
     // Get customer ID for this user and app
-    const customer = await supabaseService.getStripeCustomer(userId, appId);
+    const customerId = await supabaseService.getStripeCustomerId(userId, appId);
     
-    if (!customer || !customer.stripe_customer_id) {
+    if (!customerId) {
       return res.status(404).json(errorResponse(
         'Customer not found',
         'No active subscription found for this user',
@@ -147,8 +151,8 @@ router.get('/stripe/portal', sessionService.attachUserFromSession, requireAuth, 
     // Create customer portal session using the connected account
     const connectedStripe = require('stripe')(stripeAccount.access_token);
     const session = await connectedStripe.billingPortal.sessions.create({
-      customer: customer.stripe_customer_id,
-      return_url: `${req.protocol}://${req.get('host')}/dashboard`,
+      customer: customerId,
+      return_url: returnUrl,
     });
 
     // Redirect to Stripe Customer Portal
@@ -381,6 +385,13 @@ router.post('/logout', sessionService.attachUserFromSession, requireAuth, async 
     return next(error);
   }
 });
+
+
+// =============================================================================
+// BACKEND FUNCTIONS
+// =============================================================================
+
+
 
 // =============================================================================
 // MONGODB API ROUTES

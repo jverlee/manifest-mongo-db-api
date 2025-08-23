@@ -52,13 +52,17 @@ class SupabaseService {
     }
   }
 
-  async getStripeCustomer(userId, appId) {
+  async getStripeCustomerId(userId, appId) {
     try {
       const { data, error } = await this.client
-        .from('stripe_customers')
-        .select('*')
-        .eq('user_id', userId)
+        .from('app_user_subscriptions')
+        .select('stripe_customer_id')
+        .eq('app_user_id', userId)
         .eq('app_id', appId)
+        // where stripe_customer_id is not null
+        .not('stripe_customer_id', 'is', null)
+        // get the first one
+        .limit(1)
         .single();
 
       if (error) {
@@ -66,9 +70,9 @@ class SupabaseService {
         throw error;
       }
 
-      return data;
+      return data?.stripe_customer_id;
     } catch (error) {
-      console.error('Error in getStripeCustomer:', error);
+      console.error('Error in getStripeCustomerId:', error);
       throw error;
     }
   }
