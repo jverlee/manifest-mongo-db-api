@@ -394,6 +394,7 @@ router.post('/logout', sessionService.attachUserFromSession, requireAuth, async 
 
 // Proxy all requests to backend functions
 router.all('/backend-functions/:functionName', sessionService.attachUserFromSession, validateAccess, async (req, res) => {
+
   try {
     const { appId, functionName } = req.params;
     
