@@ -330,7 +330,7 @@ router.get('/config', sessionService.attachUserFromSession, async (req, res) => 
   if (process.env.NODE_ENV == 'development') {
     url = 'http://localhost:3100/preview/manifest-config.json';
   // if req.headers['host'] includes fly.dev, use https://manifest-app-[appId].fly.dev/preview/manifest-config.json
-  } else if (req.headers['host'].includes('fly.dev')) {
+  } else if (req.headers['referer'].includes('fly.dev')) {
     url = `https://manifest-app-${req.params.appId}.fly.dev/preview/manifest-config.json`;
   // else assume production and use https://[appId].sites.madewithmanifest.com/manifest-config.json
   } else {
@@ -338,7 +338,7 @@ router.get('/config', sessionService.attachUserFromSession, async (req, res) => 
   }
 
   console.log('req.headers', req.headers);
-  console.log('req.headers-host', req.headers['host']);
+  console.log('req.headers-referer', req.headers['referer']);
   console.log('url', url);
   console.log('data', data);
   
