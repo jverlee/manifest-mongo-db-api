@@ -334,7 +334,7 @@ router.get('/config', sessionService.attachUserFromSession, async (req, res) => 
     url = `https://manifest-app-${req.params.appId}.fly.dev/preview/manifest-config.json`;
   // else assume production and use https://[appId].sites.madewithmanifest.com/manifest-config.json
   } else {
-    url = `https://${req.params.appId}.sites.madewithmanifest.com/preview/manifest-config.json`;
+    url = `https://${req.params.appId}.sites.madewithmanifest.com/manifest-config.json`;
   }
   
   const response = await fetch(url);
