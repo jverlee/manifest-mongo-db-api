@@ -324,6 +324,26 @@ router.get('/stripe/prices', async (req, res) => {
 
 // GET /apps/:appId/config - Get app configuration from Supabase
 router.get('/config', sessionService.attachUserFromSession, async (req, res) => {
+
+  // determine url based on NODE_ENV is production or development
+  let url = '';
+  if (process.env.NODE_ENV == 'development') {
+    url = 'http://localhost:3100/preview/manifest-config.json';
+  // if req.headers['host'] includes fly.dev, use https://manifest-app-[appId].fly.dev/preview/manifest-config.json
+  } else if (req.headers['host'].includes('fly.dev')) {
+    url = `https://manifest-app-${req.params.appId}.fly.dev/preview/manifest-config.json`;
+  // else assume production and use https://[appId].sites.madewithmanifest.com/manifest-config.json
+  } else {
+    url = `https://${req.params.appId}.sites.madewithmanifest.com/preview/manifest-config.json`;
+  }
+  
+  const response = await fetch(url);
+  const data = await response.json();
+
+  res.json(data);
+  return;
+  
+  /* 
   try {
     const { appId } = req.params;
     const config = await supabaseService.getAppConfig(appId);
@@ -336,6 +356,7 @@ router.get('/config', sessionService.attachUserFromSession, async (req, res) => 
       error: 'Failed to fetch app configuration'
     });
   }
+   */
 });
 
 // =============================================================================
