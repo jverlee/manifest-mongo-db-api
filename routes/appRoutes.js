@@ -337,6 +337,8 @@ router.get('/config', sessionService.attachUserFromSession, async (req, res) => 
     url = `https://${req.params.appId}.sites.madewithmanifest.com/preview/manifest-config.json`;
   }
 
+  console.log('req.headers', req.headers);
+  console.log('req.headers-host', req.headers['host']);
   console.log('url', url);
   console.log('data', data);
   
