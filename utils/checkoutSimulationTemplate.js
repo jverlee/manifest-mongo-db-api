@@ -16,21 +16,49 @@ function getCheckoutSimulationHTML(appId, priceId, priceInfo = {}) {
       <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-gray-50 min-h-screen">
-      <!-- Header -->
-      <div class="bg-white border-b border-gray-200">
-        <div class="max-w-3xl mx-auto px-4 sm:px-6 py-4">
-          <div class="flex items-center justify-between">
-            <h1 class="text-xl font-semibold text-gray-900">Checkout</h1>
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-              Test Mode
-            </span>
-          </div>
-        </div>
-      </div>
 
       <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <!-- Left Column - Payment Form -->
+
+          <!-- Left Column - Order Summary -->
+          <div>
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 class="text-lg font-medium text-gray-900 mb-6">Order summary</h2>
+              
+              <!-- Product Details -->
+              <div class="space-y-4">
+                <div class="flex justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-gray-900">${productName}</p>
+                    <p class="text-sm text-gray-500">${currencySymbol}${displayAmount}${billingText}</p>
+                  </div>
+                  <p class="text-sm font-medium text-gray-900">${currencySymbol}${displayAmount}</p>
+                </div>
+              </div>
+
+              <div class="mt-6 pt-6 border-t border-gray-200">
+                <div class="flex justify-between">
+                  <p class="text-base font-medium text-gray-900">Total</p>
+                  <p class="text-base font-medium text-gray-900">${currencySymbol}${displayAmount}</p>
+                </div>
+                ${interval ? `<p class="mt-1 text-sm text-gray-500">Then ${currencySymbol}${displayAmount} per ${interval}</p>` : ''}
+              </div>
+
+              <!-- Additional Test Info -->
+              <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                <p class="text-sm text-blue-900 font-medium mb-1">Test Mode Information</p>
+                <ul class="text-xs text-blue-700 space-y-1">
+                  <li>• App ID: ${appId}</li>
+                  <li>• Price ID: ${priceId}</li>
+                  <li>• This is a simulated checkout</li>
+                  <li>• No actual payment will be processed</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- Right Column - Payment Form -->
           <div>
             <!-- Test Mode Notice -->
             <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
@@ -108,42 +136,7 @@ function getCheckoutSimulationHTML(appId, priceId, priceInfo = {}) {
             </div>
           </div>
 
-          <!-- Right Column - Order Summary -->
-          <div>
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 class="text-lg font-medium text-gray-900 mb-6">Order summary</h2>
-              
-              <!-- Product Details -->
-              <div class="space-y-4">
-                <div class="flex justify-between">
-                  <div>
-                    <p class="text-sm font-medium text-gray-900">${productName}</p>
-                    <p class="text-sm text-gray-500">${currencySymbol}${displayAmount}${billingText}</p>
-                  </div>
-                  <p class="text-sm font-medium text-gray-900">${currencySymbol}${displayAmount}</p>
-                </div>
-              </div>
 
-              <div class="mt-6 pt-6 border-t border-gray-200">
-                <div class="flex justify-between">
-                  <p class="text-base font-medium text-gray-900">Total</p>
-                  <p class="text-base font-medium text-gray-900">${currencySymbol}${displayAmount}</p>
-                </div>
-                ${interval ? `<p class="mt-1 text-sm text-gray-500">Then ${currencySymbol}${displayAmount} per ${interval}</p>` : ''}
-              </div>
-
-              <!-- Additional Test Info -->
-              <div class="mt-6 p-4 bg-blue-50 rounded-lg">
-                <p class="text-sm text-blue-900 font-medium mb-1">Test Mode Information</p>
-                <ul class="text-xs text-blue-700 space-y-1">
-                  <li>• App ID: ${appId}</li>
-                  <li>• Price ID: ${priceId}</li>
-                  <li>• This is a simulated checkout</li>
-                  <li>• No actual payment will be processed</li>
-                </ul>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
