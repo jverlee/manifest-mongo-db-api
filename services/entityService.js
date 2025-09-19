@@ -5,17 +5,30 @@ class EntityService {
   constructor() {}
 
   // READ operations
-  async getAllDocuments(appId, collection) {
+  async getAllDocuments(appId, collection, options = {}) {
+
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+
     const collectionRef = getCollection(appId, collection);
-    const documents = await collectionRef.find({}).toArray();
+    const query = options.appUserId ? { _appUserId: options.appUserId } : {};
+    const documents = await collectionRef.find(query).toArray();
     
     console.log(`Retrieved ${documents.length} documents from database '${appId}', collection '${collection}'`);
     return documents;
   }
 
-  async getDocumentById(appId, collection, id) {
+  async getDocumentById(appId, collection, id, options = {}) {
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+    
     const collectionRef = getCollection(appId, collection);
-    const document = await collectionRef.findOne({ _id: new ObjectId(id) });
+    const query = { _id: new ObjectId(id) };
+    
+    // Add appUserId to query if present
+    if (options.appUserId) {
+      query._appUserId = options.appUserId;
+    }
+    
+    const document = await collectionRef.findOne(query);
     
     if (!document) {
       throw new Error(`Document with id ${id} not found`);
@@ -26,8 +39,15 @@ class EntityService {
   }
 
   // CREATE operations
-  async createDocument(appId, collection, documentData) {
+  async createDocument(appId, collection, documentData, options = {}) {
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+    
     const collectionRef = getCollection(appId, collection);
+    
+    // Add appUserId if present
+    if (options.appUserId) {
+      documentData._appUserId = options.appUserId;
+    }
     
     // Add timestamp if not provided
     if (!documentData.createdAt) {
@@ -46,15 +66,26 @@ class EntityService {
     };
   }
 
-  async createManyDocuments(appId, collection, documentsData) {
+  async createManyDocuments(appId, collection, documentsData, options = {}) {
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+    
     const collectionRef = getCollection(appId, collection);
     
-    // Add timestamps to all documents
-    const documentsWithTimestamps = documentsData.map(doc => ({
-      ...doc,
-      createdAt: doc.createdAt || new Date(),
-      updatedAt: doc.updatedAt || new Date()
-    }));
+    // Add timestamps and appUserId to all documents
+    const documentsWithTimestamps = documentsData.map(doc => {
+      const documentToInsert = {
+        ...doc,
+        createdAt: doc.createdAt || new Date(),
+        updatedAt: doc.updatedAt || new Date()
+      };
+      
+      // Add appUserId if present
+      if (options.appUserId) {
+        documentToInsert._appUserId = options.appUserId;
+      }
+      
+      return documentToInsert;
+    });
     
     const result = await collectionRef.insertMany(documentsWithTimestamps);
     
@@ -66,8 +97,16 @@ class EntityService {
   }
 
   // UPDATE operations
-  async updateDocument(appId, collection, id, updateData) {
+  async updateDocument(appId, collection, id, updateData, options = {}) {
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+    
     const collectionRef = getCollection(appId, collection);
+    
+    // Build query with appUserId if present
+    const query = { _id: new ObjectId(id) };
+    if (options.appUserId) {
+      query._appUserId = options.appUserId;
+    }
     
     // Add updated timestamp
     updateData.updatedAt = new Date();
@@ -80,7 +119,7 @@ class EntityService {
     try {
       // Try findOneAndUpdate first (MongoDB 4.2+)
       const result = await collectionRef.findOneAndUpdate(
-        { _id: new ObjectId(id) },
+        query,
         { $set: updateData },
         { returnDocument: 'after' }
       );
@@ -95,7 +134,7 @@ class EntityService {
     
     // Fallback: use updateOne + findOne for older MongoDB versions
     const updateResult = await collectionRef.updateOne(
-      { _id: new ObjectId(id) },
+      query,
       { $set: updateData }
     );
     
@@ -108,7 +147,7 @@ class EntityService {
     }
     
     // Fetch the updated document
-    const updatedDoc = await collectionRef.findOne({ _id: new ObjectId(id) });
+    const updatedDoc = await collectionRef.findOne(query);
     if (!updatedDoc) {
       throw new Error(`Document with id ${id} not found after update`);
     }
@@ -117,8 +156,16 @@ class EntityService {
     return updatedDoc;
   }
 
-  async updateManyDocuments(appId, collection, filter, updateData) {
+  async updateManyDocuments(appId, collection, filter, updateData, options = {}) {
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+    
     const collectionRef = getCollection(appId, collection);
+    
+    // Add appUserId to filter if present
+    const scopedFilter = { ...filter };
+    if (options.appUserId) {
+      scopedFilter._appUserId = options.appUserId;
+    }
     
     // Add updated timestamp
     updateData.updatedAt = new Date();
@@ -129,7 +176,7 @@ class EntityService {
     }
     
     const result = await collectionRef.updateMany(
-      filter,
+      scopedFilter,
       { $set: updateData }
     );
     
@@ -141,10 +188,18 @@ class EntityService {
   }
 
   // DELETE operations
-  async deleteDocument(appId, collection, id) {
+  async deleteDocument(appId, collection, id, options = {}) {
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+    
     const collectionRef = getCollection(appId, collection);
     
-    const result = await collectionRef.findOneAndDelete({ _id: new ObjectId(id) });
+    // Build query with appUserId if present
+    const query = { _id: new ObjectId(id) };
+    if (options.appUserId) {
+      query._appUserId = options.appUserId;
+    }
+    
+    const result = await collectionRef.findOneAndDelete(query);
     
     if (!result.value) {
       throw new Error(`Document with id ${id} not found`);
@@ -154,10 +209,18 @@ class EntityService {
     return result.value;
   }
 
-  async deleteManyDocuments(appId, collection, filter) {
+  async deleteManyDocuments(appId, collection, filter, options = {}) {
+    if (options.requireLogin && !options.appUserId) { throw new Error('Authentication required'); }
+    
     const collectionRef = getCollection(appId, collection);
     
-    const result = await collectionRef.deleteMany(filter);
+    // Add appUserId to filter if present
+    const scopedFilter = { ...filter };
+    if (options.appUserId) {
+      scopedFilter._appUserId = options.appUserId;
+    }
+    
+    const result = await collectionRef.deleteMany(scopedFilter);
     
     console.log(`Deleted ${result.deletedCount} documents from database '${appId}', collection '${collection}'`);
     return {
@@ -166,12 +229,12 @@ class EntityService {
   }
 
   // Bulk operations with individual error handling
-  async bulkCreateDocuments(appId, collection, documentsData) {
+  async bulkCreateDocuments(appId, collection, documentsData, options = {}) {
     const results = [];
     
     for (const doc of documentsData) {
       try {
-        const result = await this.createDocument(appId, collection, doc);
+        const result = await this.createDocument(appId, collection, doc, options);
         results.push({ success: true, data: result });
       } catch (error) {
         results.push({ success: false, error: error.message, data: doc });
@@ -181,13 +244,13 @@ class EntityService {
     return results;
   }
 
-  async bulkUpdateDocuments(appId, collection, updates) {
+  async bulkUpdateDocuments(appId, collection, updates, options = {}) {
     const results = [];
     
     for (const update of updates) {
       try {
         const { id, ...updateData } = update;
-        const result = await this.updateDocument(appId, collection, id, updateData);
+        const result = await this.updateDocument(appId, collection, id, updateData, options);
         results.push({ success: true, data: result });
       } catch (error) {
         results.push({ success: false, error: error.message, data: update });
@@ -197,12 +260,12 @@ class EntityService {
     return results;
   }
 
-  async bulkDeleteDocuments(appId, collection, ids) {
+  async bulkDeleteDocuments(appId, collection, ids, options = {}) {
     const results = [];
     
     for (const id of ids) {
       try {
-        const result = await this.deleteDocument(appId, collection, id);
+        const result = await this.deleteDocument(appId, collection, id, options);
         results.push({ success: true, data: result });
       } catch (error) {
         results.push({ success: false, error: error.message, id });

@@ -1,5 +1,6 @@
 const { errorResponse } = require('../utils/responseUtils');
 const supabaseService = require('../services/supabaseService');
+const { getAppConfig } = require('../utils/appConfigUtils');
 
 function requireAuth(req, res, next) {
   if (!req.auth) {
@@ -17,7 +18,7 @@ async function validateAccess(req, res, next) {
     const { appId } = req.params;
     
     // Get app config based on :appId
-    const appConfig = await supabaseService.getAppConfig(appId);
+    const appConfig = await getAppConfig(appId, req);
     
     // Check monetization requirements
     if (appConfig.monetization?.type === 'login_required') {

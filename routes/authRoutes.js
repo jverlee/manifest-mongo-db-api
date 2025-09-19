@@ -3,6 +3,7 @@ const passport = require('../config/passport');
 const supabaseService = require('../services/supabaseService');
 const sessionService = require('../services/sessionService');
 const argon2 = require('argon2');
+const { getAppConfig } = require('../utils/appConfigUtils');
 const router = express.Router();
 
 // Debug endpoint - remove in production
@@ -19,7 +20,7 @@ router.get('/google', async (req, res, next) => {
   const { appId, redirectUrl } = req.query;
 
   // get config for appId
-  const config = await supabaseService.getAppConfig(appId);
+  const config = await getAppConfig(appId, req);
 
   // if config.monetization.type is not 'login_required', return error
   if (config.monetization.type !== 'login_required' && config.monetization.type !== 'payment_required') {
@@ -329,7 +330,7 @@ router.get('/apps/:appId/me', sessionService.requireAuth, async (req, res, next)
     }
     
     // Verify the app exists
-    const appConfig = await supabaseService.getAppConfig(requestedAppId);
+    const appConfig = await getAppConfig(requestedAppId, req);
     if (!appConfig) {
       return res.status(404).json({
         error: 'not_found',

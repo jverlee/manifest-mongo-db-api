@@ -7,6 +7,7 @@ const { validateAccess, requireAuth } = require('../middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('../utils/responseUtils');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_CLIENT_SECRET);
 const supabaseUtils = require('../utils/supabaseUtils');
+const { getAppConfig } = require('../utils/appConfigUtils');
 
 // =============================================================================
 // STRIPE ROUTES
@@ -322,32 +323,11 @@ router.get('/stripe/prices', async (req, res) => {
 // CONFIG ROUTES
 // =============================================================================
 
-// GET /apps/:appId/config - Get app configuration from Supabase
+// GET /apps/:appId/config - Get app configuration
 router.get('/config', sessionService.attachUserFromSession, async (req, res) => {
-
-  // determine url based on NODE_ENV is production or development
-  let url = '';
-  if (process.env.NODE_ENV == 'development') {
-    url = 'http://localhost:3100/preview/manifest-config.json';
-  // if req.headers['host'] includes fly.dev, use https://manifest-app-[appId].fly.dev/preview/manifest-config.json
-  } else if (req.headers['referer'].includes('fly.dev')) {
-    url = `https://manifest-app-${req.params.appId}.fly.dev/preview/manifest-config.json`;
-  // else assume production and use https://[appId].sites.madewithmanifest.com/manifest-config.json
-  } else {
-    url = `https://${req.params.appId}.sites.madewithmanifest.com/manifest-config.json`;
-  }
-  
-  const response = await fetch(url);
-  const data = await response.json();
-
-  res.json(data);
-  return;
-
-  /* 
   try {
     const { appId } = req.params;
-    const config = await supabaseService.getAppConfig(appId);
-    
+    const config = await getAppConfig(appId, req);
     res.json(config);
   } catch (error) {
     console.error('Error fetching app config:', error);
@@ -356,7 +336,6 @@ router.get('/config', sessionService.attachUserFromSession, async (req, res) => 
       error: 'Failed to fetch app configuration'
     });
   }
-   */
 });
 
 // =============================================================================
@@ -509,15 +488,26 @@ router.all('/backend-functions/:functionName', sessionService.attachUserFromSess
 // Add session middleware to entity routes that need authentication
 router.use('/entities', sessionService.attachUserFromSession);
 
+// Add middleware to create options for all entity routes
+router.use('/entities', async (req, res, next) => {
+
+  // get config
+  const config = await getAppConfig(req.params.appId, req);
+
+  req.entityOptions = {
+    requireLogin: (config.monetization?.type === "open") ? false : true,
+    appUserId: req?.auth?.appUserId,
+  };
+  next();
+});
+
 // READ operations
 // GET /apps/:appId/entities/:collection - Get all documents
 router.get('/entities/:collection', validateAccess, async (req, res) => {
-  
-  console.log('Auth:', req.auth)
 
   try {
     const { appId, collection } = req.params;
-    const documents = await entityService.getAllDocuments(appId, collection);
+    const documents = await entityService.getAllDocuments(appId, collection, req.entityOptions);
     
     res.json(createResponse(documents, documents.length, appId, collection));
   } catch (error) {
@@ -530,7 +520,7 @@ router.get('/entities/:collection', validateAccess, async (req, res) => {
 router.get('/entities/:collection/:id', validateAccess, async (req, res) => {
   try {
     const { appId, collection, id } = req.params;
-    const document = await entityService.getDocumentById(appId, collection, id);
+    const document = await entityService.getDocumentById(appId, collection, id, req.entityOptions);
     
     res.json(createResponse(document, null, appId, collection));
   } catch (error) {
@@ -558,7 +548,7 @@ router.post('/entities/:collection', validateAccess, async (req, res) => {
       ));
     }
     
-    const createdDocument = await entityService.createDocument(appId, collection, documentData);
+    const createdDocument = await entityService.createDocument(appId, collection, documentData, req.entityOptions);
     
     res.status(201).json(createResponse(createdDocument, null, appId, collection));
   } catch (error) {
@@ -581,7 +571,7 @@ router.post('/entities/:collection/bulk', validateAccess, async (req, res) => {
       ));
     }
     
-    const results = await entityService.bulkCreateDocuments(appId, collection, documents);
+    const results = await entityService.bulkCreateDocuments(appId, collection, documents, req.entityOptions);
     
     res.status(201).json(bulkResponse(results, appId, collection));
   } catch (error) {
@@ -605,7 +595,7 @@ router.put('/entities/:collection/:id', validateAccess, async (req, res) => {
       ));
     }
     
-    const updatedDocument = await entityService.updateDocument(appId, collection, id, updateData);
+    const updatedDocument = await entityService.updateDocument(appId, collection, id, updateData, req.entityOptions);
     
     res.json(createResponse(updatedDocument, null, appId, collection));
   } catch (error) {
@@ -642,7 +632,7 @@ router.put('/entities/:collection/bulk', validateAccess, async (req, res) => {
       ));
     }
     
-    const results = await entityService.bulkUpdateDocuments(appId, collection, updates);
+    const results = await entityService.bulkUpdateDocuments(appId, collection, updates, req.entityOptions);
     
     res.json(bulkResponse(results, appId, collection));
   } catch (error) {
@@ -656,7 +646,7 @@ router.put('/entities/:collection/bulk', validateAccess, async (req, res) => {
 router.delete('/entities/:collection/:id', validateAccess, async (req, res) => {
   try {
     const { appId, collection, id } = req.params;
-    const deletedDocument = await entityService.deleteDocument(appId, collection, id);
+    const deletedDocument = await entityService.deleteDocument(appId, collection, id, req.entityOptions);
     
     res.json(createResponse(deletedDocument, null, appId, collection));
   } catch (error) {
@@ -683,7 +673,7 @@ router.delete('/entities/:collection/bulk', validateAccess, async (req, res) => 
       ));
     }
     
-    const results = await entityService.bulkDeleteDocuments(appId, collection, ids);
+    const results = await entityService.bulkDeleteDocuments(appId, collection, ids, req.entityOptions);
     
     res.json(bulkResponse(results, appId, collection));
   } catch (error) {
