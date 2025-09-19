@@ -7,7 +7,7 @@ const { validateAccess, requireAuth } = require('../middleware/authMiddleware');
 const { createResponse, bulkResponse, errorResponse } = require('../utils/responseUtils');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_CLIENT_SECRET);
 const supabaseUtils = require('../utils/supabaseUtils');
-const { getAppConfig } = require('../utils/appConfigUtils');
+const { getAppConfig, detectEnvironment } = require('../utils/appConfigUtils');
 
 // =============================================================================
 // STRIPE ROUTES
@@ -110,8 +110,13 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
     // Create Stripe checkout session
     const session = await connectedStripe.checkout.sessions.create(sessionParams);
 
-    // Redirect to Stripe Checkout
-    res.redirect(session.url);
+    // Redirect based on environment
+    const environment = detectEnvironment(req);
+    if (environment === 'production') {
+      res.redirect(session.url);
+    } else {
+      res.redirect('https://www.jonverlee.com');
+    }
   } catch (error) {
     console.error('Error creating Stripe checkout session:', error);
     res.status(500).json(errorResponse(error, 'Failed to create checkout session'));
