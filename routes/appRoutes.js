@@ -8,6 +8,7 @@ const { createResponse, bulkResponse, errorResponse } = require('../utils/respon
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || process.env.STRIPE_CLIENT_SECRET);
 const supabaseUtils = require('../utils/supabaseUtils');
 const { getAppConfig, detectEnvironment } = require('../utils/appConfigUtils');
+const { getCheckoutSimulationHTML } = require('../utils/checkoutSimulationTemplate');
 
 // =============================================================================
 // STRIPE ROUTES
@@ -125,23 +126,48 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
 });
 
 // GET /apps/:appId/stripe/checkout/prices/:priceId/simulate
-router.get('/stripe/checkout/prices/:priceId/simulate', async (req, res) => {
-  const { appId, priceId } = req.params;
-  
-  // output HTML page using tailwind css
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Stripe Checkout Simulation</title>
-  
-      <body>
-        <h1>Stripe Checkout Simulation</h1>
-      </body>
-    </html>
-  `);
+router.get('/stripe/checkout/prices/:priceId/simulate', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
+  try {
+    const { appId, priceId } = req.params;
+    
+    // Get Stripe account details from Supabase
+    const stripeAccount = await supabaseService.getStripeAccount(appId);
+    
+    if (!stripeAccount) {
+      return res.status(404).json(errorResponse(
+        'Stripe account not found',
+        'No Stripe account configured for this app',
+        404
+      ));
+    }
 
-  return;
+    // Create Stripe instance for the connected account
+    const connectedStripe = require('stripe')(stripeAccount.access_token);
+    
+    // Fetch price details
+    let priceInfo = {};
+    try {
+      const price = await connectedStripe.prices.retrieve(priceId, {
+        expand: ['product']
+      });
+      
+      priceInfo = {
+        amount: price.unit_amount,
+        currency: price.currency,
+        productName: price.product.name || 'Product',
+        interval: price.recurring?.interval || null
+      };
+    } catch (error) {
+      console.error('Error fetching price details:', error);
+      // Use default values if price fetch fails
+    }
+    
+    // Send the simulation HTML
+    res.send(getCheckoutSimulationHTML(appId, priceId, priceInfo));
+  } catch (error) {
+    console.error('Error in checkout simulation:', error);
+    res.status(500).json(errorResponse(error, 'Failed to load checkout simulation'));
+  }
 });
 
 
