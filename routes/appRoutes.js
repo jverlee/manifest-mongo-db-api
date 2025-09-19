@@ -115,13 +115,35 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
     if (environment === 'production') {
       res.redirect(session.url);
     } else {
-      res.redirect('https://www.jonverlee.com');
+      // redirect to simulate route
+      res.redirect(`/apps/${appId}/stripe/checkout/prices/${priceId}/simulate`);
     }
   } catch (error) {
     console.error('Error creating Stripe checkout session:', error);
     res.status(500).json(errorResponse(error, 'Failed to create checkout session'));
   }
 });
+
+// GET /apps/:appId/stripe/checkout/prices/:priceId/simulate
+router.get('/stripe/checkout/prices/:priceId/simulate', async (req, res) => {
+  const { appId, priceId } = req.params;
+  
+  // output HTML page using tailwind css
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Stripe Checkout Simulation</title>
+  
+      <body>
+        <h1>Stripe Checkout Simulation</h1>
+      </body>
+    </html>
+  `);
+
+  return;
+});
+
 
 // GET /apps/:appId/stripe/portal - Create customer portal session
 router.get('/stripe/portal', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
