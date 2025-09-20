@@ -47,376 +47,1021 @@ function getPortalSimulationHTML(appId, userData = {}, simulationData = {}, avai
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Customer Portal</title>
-      <script src="https://cdn.tailwindcss.com"></script>
       <style>
-        /* Custom styles to match Stripe portal */
-        .stripe-card {
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: #f4f5f8;
+          height: 100vh;
+          display: flex;
+        }
+        
+        /* Left Panel */
+        .left-panel {
+          flex: 0 0 40%;
+          background-color: #f4f5f8;
+          padding: 64px;
+          height: 100vh;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
+        
+        /* Right Panel */
+        .right-panel {
+          flex: 0 0 60%;
+          background-color: white;
+          padding: 64px;
+          height: 100vh;
+          overflow-y: auto;
+          box-shadow: rgba(0, 0, 0, 0.18) 15px 0px 30px 0px;
+        }
+        
+        /* Header */
+        .header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 48px;
+        }
+        
+        .avatar {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
           background: white;
-          border: 1px solid #e6ebf1;
-          border-radius: 6px;
-          padding: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-right: 12px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        .stripe-button {
-          background-color: #5469d4;
-          color: white;
+        
+        .business-name {
+          font-size: 16px;
           font-weight: 500;
-          border-radius: 6px;
-          padding: 10px 20px;
+          color: #1a1f36;
+          margin-right: 12px;
+        }
+        
+        .test-badge {
+          background: #fef3c7;
+          color: #92400e;
+          padding: 2px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 500;
+        }
+        
+        .tagline {
+          font-size: 24px;
+          font-weight: 500;
+          color: #1a1f36;
+          line-height: 1.3;
+          max-width: 240px;
+          margin-bottom: 32px;
+        }
+        
+        .return-link {
+          display: flex;
+          align-items: center;
+          color: #1a1f36;
+          text-decoration: none;
           font-size: 14px;
-          transition: background-color 0.15s ease-in-out;
-          border: none;
+          font-weight: 500;
+        }
+        
+        .return-link:hover {
+          color: #374151;
+        }
+        
+        .return-link svg {
+          margin-right: 8px;
+        }
+        
+        /* Footer */
+        .footer {
+          opacity: 0.6;
+        }
+        
+        .powered-by {
+          display: flex;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        
+        .powered-by span {
+          font-size: 12px;
+          color: #1a1f36;
+          margin-right: 8px;
+        }
+        
+        .legal-links {
+          display: flex;
+          gap: 16px;
+        }
+        
+        .legal-links a {
+          font-size: 12px;
+          color: #1a1f36;
+          text-decoration: none;
+        }
+        
+        /* Section Headers */
+        .section-header {
+          border-bottom: 1px solid #e5e7eb;
+          padding-bottom: 16px;
+          margin-bottom: 16px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        
+        .section-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: #374151;
+          text-transform: uppercase;
+          letter-spacing: 0.025em;
+        }
+        
+        .section {
+          margin-bottom: 64px;
+        }
+        
+        /* Subscription Section */
+        .subscription-info {
+          margin-bottom: 16px;
+        }
+        
+        .plan-name {
+          font-size: 20px;
+          font-weight: 500;
+          color: #1a1f36;
+          margin-bottom: 4px;
+        }
+        
+        .plan-price {
+          font-size: 24px;
+          font-weight: 700;
+          color: #1a1f36;
+          margin-bottom: 12px;
+        }
+        
+        .plan-details {
+          font-size: 14px;
+          color: #374151;
+          margin-bottom: 16px;
+        }
+        
+        .payment-method {
+          display: flex;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+        
+        .card-icon {
+          width: 20px;
+          height: 20px;
+          margin-right: 8px;
+          background: white;
+          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .card-info {
+          font-size: 16px;
+          color: #1a1f36;
+        }
+        
+        .cancel-button {
+          background: white;
+          border: 1px solid #d1d5db;
+          padding: 8px 16px;
+          border-radius: 6px;
+          font-size: 16px;
+          font-weight: 500;
+          color: #374151;
           cursor: pointer;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+          text-decoration: none;
+          display: inline-block;
         }
-        .stripe-button:hover {
-          background-color: #4f46e5;
+        
+        .cancel-button:hover {
+          background: #f9fafb;
         }
-        .stripe-button-danger {
-          background-color: #dc2626;
-          color: white;
+        
+        /* Payment Method Section */
+        .payment-method-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 24px;
         }
-        .stripe-button-danger:hover {
-          background-color: #b91c1c;
+        
+        .payment-left {
+          display: flex;
+          align-items: center;
         }
-        .stripe-button:disabled {
-          background-color: #9ca3af;
+        
+        .payment-right {
+          font-size: 16px;
+          color: #1a1f36;
+        }
+        
+        .add-payment {
+          display: flex;
+          align-items: center;
+          color: #6b7280;
+          text-decoration: none;
+          font-size: 16px;
+          font-weight: 500;
           cursor: not-allowed;
         }
-        .section-title {
+        
+        .add-payment:hover {
+          color: #374151;
+        }
+        
+        .add-payment svg {
+          margin-right: 8px;
+        }
+        
+        /* Billing Info Section */
+        .billing-row {
+          display: flex;
+          margin-bottom: 24px;
+        }
+        
+        .billing-label {
+          flex: 0 0 160px;
+          font-size: 16px;
+          color: #6b7280;
+          padding-right: 8px;
+        }
+        
+        .billing-value {
+          font-size: 16px;
+          color: #1a1f36;
+          max-width: 80%;
+        }
+        
+        .edit-button {
+          display: flex;
+          align-items: center;
+          color: #6b7280;
+          text-decoration: none;
+          font-size: 16px;
+          font-weight: 500;
+          cursor: not-allowed;
+        }
+        
+        .edit-button:hover {
+          color: #374151;
+        }
+        
+        .edit-button svg {
+          margin-right: 8px;
+        }
+        
+        /* Invoice Section */
+        .invoice-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 0;
+          border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .invoice-left {
+          display: flex;
+          align-items: center;
+        }
+        
+        .invoice-status {
+          width: 8px;
+          height: 8px;
+          background: #10b981;
+          border-radius: 50%;
+          margin-right: 12px;
+        }
+        
+        .invoice-date {
+          font-size: 14px;
+          font-weight: 500;
+          color: #1a1f36;
+        }
+        
+        .invoice-desc {
+          font-size: 12px;
+          color: #6b7280;
+        }
+        
+        .invoice-right {
+          text-align: right;
+        }
+        
+        .invoice-amount {
+          font-size: 14px;
+          font-weight: 500;
+          color: #1a1f36;
+        }
+        
+        .invoice-download {
+          font-size: 12px;
+          color: #3b82f6;
+          text-decoration: none;
+        }
+        
+        .invoice-download:hover {
+          color: #1d4ed8;
+        }
+        
+        /* Dev Notice */
+        .dev-notice {
+          background: #fef3c7;
+          border: 1px solid #f59e0b;
+          border-radius: 6px;
+          padding: 12px;
+          font-size: 14px;
+          color: #92400e;
+          margin: 16px 0;
+        }
+        
+        /* Modal Styles */
+        .modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.5);
+          display: none !important;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+        
+        .modal.show {
+          display: flex !important;
+        }
+        
+        .modal-content {
+          background: white;
+          border-radius: 8px;
+          padding: 24px;
+          max-width: 500px;
+          width: 90%;
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+        
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+        
+        .modal-title {
           font-size: 18px;
           font-weight: 600;
-          color: #1a202c;
-          margin-bottom: 16px;
+          color: #1a1f36;
+        }
+        
+        .close-button {
+          background: none;
+          border: none;
+          font-size: 24px;
+          color: #6b7280;
+          cursor: pointer;
+        }
+        
+        .modal-body {
+          margin-bottom: 24px;
+        }
+        
+        .modal-footer {
+          display: flex;
+          gap: 12px;
+        }
+        
+        .btn {
+          padding: 12px 20px;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          border: none;
+          flex: 1;
+        }
+        
+        .btn-primary {
+          background: #3b82f6;
+          color: white;
+        }
+        
+        .btn-primary:hover {
+          background: #2563eb;
+        }
+        
+        .btn-secondary {
+          background: #f3f4f6;
+          color: #374151;
+          border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+          background: #e5e7eb;
+        }
+        
+        .btn-danger {
+          background: #dc2626;
+          color: white;
+        }
+        
+        .btn-danger:hover {
+          background: #b91c1c;
+        }
+        
+        .plan-option {
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          padding: 16px;
+          margin-bottom: 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .plan-option:hover {
+          border-color: #3b82f6;
+        }
+        
+        .plan-option.selected {
+          border-color: #3b82f6;
+          background: #eff6ff;
+        }
+        
+        .plan-option-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        
+        .plan-option-name {
+          font-weight: 500;
+          color: #1a1f36;
+        }
+        
+        .plan-option-price {
+          font-weight: 500;
+          color: #1a1f36;
+        }
+        
+        .plan-option-desc {
+          font-size: 14px;
+          color: #6b7280;
+          margin-top: 4px;
+        }
+        
+        .current-plan {
+          background: #eff6ff;
+          border-color: #3b82f6;
+        }
+        
+        .current-plan-label {
+          font-size: 14px;
+          color: #3b82f6;
+        }
+        
+        .no-subscription {
+          text-align: center;
+          padding: 48px 24px;
+        }
+        
+        .no-subscription svg {
+          width: 48px;
+          height: 48px;
+          color: #dc2626;
+          margin: 0 auto 16px;
+        }
+        
+        .no-subscription h3 {
+          font-size: 18px;
+          font-weight: 500;
+          color: #1a1f36;
+          margin-bottom: 8px;
+        }
+        
+        .no-subscription p {
+          color: #6b7280;
+          margin-bottom: 24px;
+        }
+        
+        .no-subscription .btn-group {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
         }
       </style>
     </head>
-    <body class="bg-gray-50 min-h-screen">
-      <!-- Header -->
-      <div class="bg-white border-b border-gray-200">
-        <div class="max-w-5xl mx-auto px-4 py-6">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <div class="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center">
-                <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 16 16">
-                  <path fill-rule="evenodd" clip-rule="evenodd" d="M14.9977 8.19089C15.6092 7.64898 16.0002 6.87952 16.0002 6V5.90012C16.0002 5.58415 15.9687 5.26896 15.9061 4.95925L15.2757 1.83964L15.2729 1.82792C15.1493 1.3036 14.9237 0.814761 14.4989 0.46826C14.0702 0.118638 13.5447 2.32458e-05 13 2.20537e-05L3 0C2.45536 0 1.92982 0.118541 1.50106 0.46812C1.0761 0.814602 0.850422 1.30347 0.726786 1.8279L0.72402 1.83963L0.0936206 4.95927C0.0310375 5.26897 -0.000488281 5.58414 -0.000488281 5.90011V6C-0.000488281 6.87964 0.390631 7.64918 1.00228 8.19109C1.00077 8.21053 1 8.23017 1 8.25V13.75C1 14.9926 2.00736 16 3.25 16H12.75C13.9926 16 15 14.9926 15 13.75V8.25C15 8.2301 14.9992 8.21039 14.9977 8.19089Z"/>
+    <body>
+      <!-- Main Container -->
+      <div style="display: flex; height: 100vh; width: 100%;">
+        
+        <!-- Left Panel -->
+        <div class="left-panel">
+          <div>
+            <!-- Header -->
+            <div class="header">
+              <div class="avatar">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="#6b7280">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M14.998 8.19A2.908 2.908 0 0 0 16 6v-.1c0-.316-.031-.631-.094-.94l-.63-3.12-.003-.012c-.124-.524-.35-1.013-.774-1.36C14.07.118 13.545 0 13 0H3c-.545 0-1.07.119-1.499.468-.425.347-.65.835-.774 1.36l-.003.012-.63 3.12A4.75 4.75 0 0 0 0 5.9V6c0 .88.39 1.65 1.002 2.191A.76.76 0 0 0 1 8.25v5.5A2.25 2.25 0 0 0 3.25 16h9.5A2.25 2.25 0 0 0 15 13.75v-5.5c0-.02 0-.04-.002-.06Z"/>
                 </svg>
               </div>
-              <h1 class="text-xl font-medium text-gray-900">Customer Portal</h1>
-              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 16 16">
-                  <path fill-rule="evenodd" clip-rule="evenodd" d="M7.09793 1.68763C7.36276 1.56405 7.65145 1.5 7.9437 1.5H8.0563C8.34855 1.5 8.63724 1.56405 8.90207 1.68763L14.8458 4.46136C15.5499 4.78996 16 5.49668 16 6.27373V9.76393C16 10.5215 15.572 11.214 14.8944 11.5528L9.63344 14.1833C9.21687 14.3916 8.75753 14.5 8.2918 14.5H7.7082C7.24247 14.5 6.78313 14.3916 6.36656 14.1833L1.10557 11.5528C0.428006 11.214 0 10.5215 0 9.76393V6.27373C0 5.49668 0.45008 4.78996 1.15423 4.46136L7.09793 1.68763Z"/>
-                </svg>
-                Test Mode
-              </span>
+              <span class="business-name">${displayName}</span>
+              <span class="test-badge">Test mode</span>
             </div>
-            <button onclick="window.history.back()" class="text-sm text-gray-600 hover:text-gray-900">
-              ← Return to app
-            </button>
+            
+            <div style="margin-top: 48px;">
+              <div class="tagline">${displayName} partners with Stripe for simplified billing.</div>
+              <a href="#" onclick="window.history.back()" class="return-link">
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <path d="M4.72.97a.75.75 0 0 1 1.06 1.06L2.56 5.25h8.69a.75.75 0 0 1 0 1.5H2.56l3.22 3.22a.75.75 0 1 1-1.06 1.06l-4.5-4.5a.748.748 0 0 1 0-1.06l4.5-4.5Z" fill="currentColor"/>
+                </svg>
+                Return to ${displayName}
+              </a>
+            </div>
           </div>
           
-          <!-- Test Mode Alert -->
-          <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div class="flex gap-3">
-              <svg class="w-5 h-5 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+          <!-- Footer -->
+          <div class="footer">
+            <div class="powered-by">
+              <span>Powered by</span>
+              <svg width="38" height="16" viewBox="0 0 360 150">
+                <path fill="#1a1f36" fill-rule="evenodd" d="M360 77.4c0 2.4-.2 7.6-.2 8.9h-48.9c1.1 11.8 9.7 15.2 19.4 15.2 9.9 0 17.7-2.1 24.5-5.5v20c-6.8 3.8-15.8 6.5-27.7 6.5-24.4 0-41.4-15.2-41.4-45.3 0-25.4 14.4-45.6 38.2-45.6 23.7 0 36.1 20.2 36.1 45.8zm-49.4-9.5h25.8c0-11.3-6.5-16-12.6-16-6.3 0-13.2 4.7-13.2 16zm-63.5-36.3c17.5 0 34 15.8 34.1 44.8 0 31.7-16.3 46.1-34.2 46.1-8.8 0-14.1-3.7-17.7-6.3l-.1 28.3-25 5.3V33.2h22l1.3 6.2c3.5-3.2 9.8-7.8 19.6-7.8zm-6 68.9c9.2 0 15.4-10 15.4-23.4 0-13.1-6.3-23.3-15.4-23.3-5.7 0-9.3 2-11.9 4.9l.1 37.1c2.4 2.6 5.9 4.7 11.8 4.7zm-71.3-74.8V5.3L194.9 0v20.3l-25.1 5.4zm0 7.6h25.1v87.5h-25.1V33.3zm-26.9 7.4c5.9-10.8 17.6-8.6 20.8-7.4v23c-3.1-1.1-13.1-2.5-19 5.2v59.3h-25V33.3h21.6l1.6 7.4zm-50-29.1l-.1 21.7h19v21.3h-19v35.5c0 14.8 15.8 10.2 19 8.9v20.3c-3.3 1.8-9.3 3.3-17.5 3.3-14.8 0-25.9-10.9-25.9-25.7l.1-80.1 24.4-5.2zM25.3 58.7c0 11.2 38.1 5.9 38.2 35.7 0 17.9-14.3 28.2-35.1 28.2-8.6 0-18-1.7-27.3-5.7V93.1c8.4 4.6 19 8 27.3 8 5.6 0 9.6-1.5 9.6-6.1 0-11.9-38-7.5-38-35.1 0-17.7 13.5-28.3 33.8-28.3 8.3 0 16.5 1.3 24.8 4.6v23.5c-7.6-4.1-17.2-6.4-24.8-6.4-5.3 0-8.5 1.5-8.5 5.4z"/>
               </svg>
-              <div>
-                <h3 class="text-sm font-medium text-yellow-900">Development Environment</h3>
-                <p class="text-sm text-yellow-700">This is a simulated customer portal. Changes here won't affect real billing data. Payment method and invoice features are disabled in development.</p>
-              </div>
+            </div>
+            <div class="legal-links">
+              <a href="https://stripe.com/terms" target="_blank">Terms</a>
+              <a href="https://stripe.com/privacy" target="_blank">Privacy</a>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Main Content -->
-      <div class="max-w-5xl mx-auto px-4 py-8">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Right Panel -->
+        <div class="right-panel">
+          <div style="min-height: 100px; padding-top: 4px;"></div>
           
-          <!-- Left Column - Account Overview -->
-          <div class="lg:col-span-2 space-y-6">
+          <!-- Current Subscription Section -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">Current subscription</div>
+            </div>
             
-            <!-- Subscription Card -->
-            <div class="stripe-card">
-              <h2 class="section-title">Subscription</h2>
-              ${status === 'canceled' ? `
-                <div class="text-center py-8">
-                  <svg class="w-12 h-12 text-red-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  <h3 class="text-lg font-medium text-gray-900 mb-2">Subscription canceled</h3>
-                  <p class="text-gray-600 mb-4">Your subscription has been canceled in the simulation.</p>
-                  <div class="flex space-x-3 justify-center">
-                    <button onclick="reactivateSubscription()" class="stripe-button">
-                      Reactivate subscription
-                    </button>
-                    <button onclick="window.history.back()" class="stripe-button">
-                      Browse plans
-                    </button>
-                  </div>
-                </div>
-              ` : currentSubscription || (status === 'current' && currentPriceId) ? `
-                <div class="space-y-4">
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <div class="flex items-center space-x-2">
-                        <span class="text-2xl font-semibold text-gray-900">${planName}</span>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Active
-                        </span>
-                      </div>
-                      ${subscriptionDate ? `<p class="text-sm text-gray-600 mt-1">Started ${subscriptionDate}</p>` : ''}
-                      ${currentPriceId ? `<p class="text-xs text-gray-500 mt-1">Plan ID: ${currentPriceId}</p>` : ''}
-                    </div>
-                    <div class="text-right">
-                      ${planAmount ? `
-                        <div class="text-lg font-medium text-gray-900">${formatPrice(planAmount, planCurrency)}</div>
-                        ${planInterval ? `<div class="text-sm text-gray-500">per ${planInterval}</div>` : ''}
-                      ` : `
-                        <div class="text-lg font-medium text-gray-900">Active</div>
-                      `}
-                    </div>
-                  </div>
-                  
-                  <div class="pt-4 border-t border-gray-200">
-                    <div class="flex space-x-3">
-                      ${otherPlans.length > 0 ? `
-                        <button onclick="showUpgradeModal()" class="stripe-button">
-                          Change plan
-                        </button>
-                      ` : ''}
-                      <button onclick="showCancelModal()" class="stripe-button stripe-button-danger">
-                        Cancel subscription
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ` : `
-                <div class="text-center py-8">
-                  <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  <h3 class="text-lg font-medium text-gray-900 mb-2">No active subscription</h3>
-                  <p class="text-gray-600 mb-4">You don't have an active subscription.</p>
-                  <button onclick="window.history.back()" class="stripe-button">
-                    Browse plans
-                  </button>
-                </div>
-              `}
-            </div>
-
-            <!-- Payment Methods Card -->
-            <div class="stripe-card">
-              <h2 class="section-title">Payment methods</h2>
-              <div class="space-y-4">
-                <div class="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
-                  <div class="flex-shrink-0">
-                    <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
-                    </svg>
-                  </div>
-                  <div class="flex-1">
-                    <div class="flex items-center space-x-2">
-                      <span class="text-sm font-medium text-gray-900">•••• •••• •••• 4242</span>
-                      <span class="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded">VISA</span>
-                      <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Default</span>
-                    </div>
-                    <p class="text-xs text-gray-500">Expires 12/34</p>
-                  </div>
-                  <div class="flex-shrink-0">
-                    <button class="text-sm text-gray-400 cursor-not-allowed" disabled>
-                      Edit
-                    </button>
-                  </div>
-                </div>
-                
-                <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div class="flex gap-3">
-                    <svg class="w-5 h-5 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                    </svg>
-                    <div class="text-sm text-yellow-700">
-                      Payment method editing is disabled in development mode. This feature will work when your app is published.
-                    </div>
-                  </div>
+            ${status === 'canceled' ? `
+              <div class="no-subscription">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <h3>Subscription canceled</h3>
+                <p>Your subscription has been canceled in the simulation.</p>
+                <div class="btn-group">
+                  <button onclick="reactivateSubscription()" class="btn btn-primary">Reactivate subscription</button>
+                  <button onclick="window.history.back()" class="btn btn-secondary">Browse plans</button>
                 </div>
               </div>
-            </div>
-
-            <!-- Invoice History Card -->
-            <div class="stripe-card">
-              <h2 class="section-title">Invoice history</h2>
-              <div class="space-y-3">
-                ${subscriptionDate && planAmount ? `
-                  <div class="flex items-center justify-between py-3 border-b border-gray-100">
-                    <div class="flex items-center space-x-3">
-                      <div class="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <div>
-                        <div class="text-sm font-medium text-gray-900">${subscriptionDate}</div>
-                        <div class="text-xs text-gray-500">${planInterval ? `${planInterval.charAt(0).toUpperCase() + planInterval.slice(1)}ly` : ''} subscription</div>
-                      </div>
-                    </div>
-                    <div class="text-right">
-                      <div class="text-sm font-medium text-gray-900">${formatPrice(planAmount, planCurrency)}</div>
-                      <button class="text-xs text-blue-600 hover:text-blue-800 cursor-not-allowed" disabled>
-                        Download
-                      </button>
-                    </div>
-                  </div>
-                ` : `
-                  <div class="flex items-center justify-center py-8">
-                    <div class="text-sm text-gray-500">No invoices available</div>
-                  </div>
-                `}
+            ` : currentSubscription || (status === 'current' && currentPriceId) ? `
+              <div class="subscription-info">
+                <div class="plan-name">${planName}</div>
+                <div class="plan-price">${planAmount ? formatPrice(planAmount, planCurrency) : 'Active'} ${planInterval ? `per ${planInterval}` : ''}</div>
+                ${subscriptionDate ? `<div class="plan-details">Your subscription renews on ${subscriptionDate}.</div>` : ''}
                 
-                <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                  <div class="text-sm text-gray-600 text-center">
-                    Invoice downloads are disabled in development mode.
+                <div class="payment-method">
+                  <div class="card-icon">
+                    <svg width="20" height="20" viewBox="0 0 32 32">
+                      <g fill="none" fill-rule="evenodd">
+                        <path d="M0 0h32v32H0z" fill="#00579f"/>
+                        <g fill="#fff" fill-rule="nonzero">
+                          <path d="M13.823 19.876H11.8l1.265-7.736h2.023zm7.334-7.546a5.036 5.036 0 0 0-1.814-.33c-1.998 0-3.405 1.053-3.414 2.56-.016 1.11 1.007 1.728 1.773 2.098.783.379 1.05.626 1.05.963-.009.518-.633.757-1.216.757-.808 0-1.24-.123-1.898-.411l-.267-.124-.283 1.737c.475.213 1.349.403 2.257.411 2.123 0 3.505-1.037 3.521-2.641.008-.881-.532-1.556-1.698-2.107-.708-.354-1.141-.593-1.141-.955.008-.33.366-.667 1.165-.667a3.471 3.471 0 0 1 1.507.297l.183.082zm2.69 4.806.807-2.165c-.008.017.167-.452.266-.74l.142.666s.383 1.852.466 2.239h-1.682zm2.497-4.996h-1.565c-.483 0-.85.14-1.058.642l-3.005 7.094h2.123l.425-1.16h2.597c.059.271.242 1.16.242 1.16h1.873zm-16.234 0-1.982 5.275-.216-1.07c-.366-1.234-1.515-2.575-2.797-3.242l1.815 6.765h2.14l3.18-7.728z"/>
+                        </g>
+                      </g>
+                    </svg>
                   </div>
+                  <span class="card-info">Visa •••• 4242</span>
+                </div>
+                
+                <button onclick="showCancelModal()" class="cancel-button">Cancel subscription</button>
+              </div>
+            ` : `
+              <div class="no-subscription">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <h3>No active subscription</h3>
+                <p>You don't have an active subscription.</p>
+                <div class="btn-group">
+                  <button onclick="window.history.back()" class="btn btn-primary">Browse plans</button>
                 </div>
               </div>
+            `}
+          </div>
+          
+          <!-- Payment Method Section -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">Payment method</div>
+            </div>
+            
+            <div class="payment-method-card">
+              <div class="payment-left">
+                <div class="card-icon">
+                  <svg width="24" height="24" viewBox="0 0 32 32">
+                    <g fill="none" fill-rule="evenodd">
+                      <path d="M0 0h32v32H0z" fill="#00579f"/>
+                      <g fill="#fff" fill-rule="nonzero">
+                        <path d="M13.823 19.876H11.8l1.265-7.736h2.023zm7.334-7.546a5.036 5.036 0 0 0-1.814-.33c-1.998 0-3.405 1.053-3.414 2.56-.016 1.11 1.007 1.728 1.773 2.098.783.379 1.05.626 1.05.963-.009.518-.633.757-1.216.757-.808 0-1.24-.123-1.898-.411l-.267-.124-.283 1.737c.475.213 1.349.403 2.257.411 2.123 0 3.505-1.037 3.521-2.641.008-.881-.532-1.556-1.698-2.107-.708-.354-1.141-.593-1.141-.955.008-.33.366-.667 1.165-.667a3.471 3.471 0 0 1 1.507.297l.183.082zm2.69 4.806.807-2.165c-.008.017.167-.452.266-.74l.142.666s.383 1.852.466 2.239h-1.682zm2.497-4.996h-1.565c-.483 0-.85.14-1.058.642l-3.005 7.094h2.123l.425-1.16h2.597c.059.271.242 1.16.242 1.16h1.873zm-16.234 0-1.982 5.275-.216-1.07c-.366-1.234-1.515-2.575-2.797-3.242l1.815 6.765h2.14l3.18-7.728z"/>
+                      </g>
+                    </g>
+                  </svg>
+                </div>
+                <span class="card-info">Visa •••• 4242</span>
+              </div>
+              <div class="payment-right">Expires 04/2032</div>
+            </div>
+            
+            <a href="#" class="add-payment">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M8 .25c.483 0 .875.392.875.875v6h6a.875.875 0 0 1 0 1.75h-6v6a.875.875 0 0 1-1.75 0v-6h-6a.875.875 0 1 1 0-1.75h6v-6c0-.483.392-.875.875-.875Z"/>
+              </svg>
+              Add payment method
+            </a>
+            
+            <div class="dev-notice">
+              Payment method editing is disabled in development mode. This feature will work when your app is published.
             </div>
           </div>
-
-          <!-- Right Column - Account Info -->
-          <div class="space-y-6">
+          
+          <!-- Billing Information Section -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">Billing information</div>
+            </div>
             
-            <!-- Account Information -->
-            <div class="stripe-card">
-              <h2 class="section-title">Account information</h2>
-              <div class="space-y-4">
-                <div>
-                  <label class="text-xs font-medium text-gray-700 uppercase tracking-wide">Name</label>
-                  <div class="mt-1 text-sm text-gray-900">${displayName}</div>
-                </div>
-                <div>
-                  <label class="text-xs font-medium text-gray-700 uppercase tracking-wide">Email</label>
-                  <div class="mt-1 text-sm text-gray-900">${email}</div>
-                </div>
-                <div class="pt-3 border-t border-gray-200">
-                  <button class="text-sm text-gray-400 cursor-not-allowed" disabled>
-                    Update information
-                  </button>
-                  <p class="text-xs text-gray-500 mt-1">Account updates are disabled in development mode.</p>
-                </div>
+            <div class="billing-row">
+              <div class="billing-label">Name</div>
+              <div class="billing-value">${displayName}</div>
+            </div>
+            
+            <div class="billing-row">
+              <div class="billing-label">Email</div>
+              <div class="billing-value">${email}</div>
+            </div>
+            
+            <div class="billing-row">
+              <div class="billing-label">Billing address</div>
+              <div class="billing-value">
+                <address style="font-style: normal;">
+                  49426 US
+                </address>
               </div>
             </div>
-
-            <!-- App Information -->
-            <div class="stripe-card">
-              <h2 class="section-title">App information</h2>
-              <div class="space-y-2">
-                <div>
-                  <label class="text-xs font-medium text-gray-700 uppercase tracking-wide">App ID</label>
-                  <div class="mt-1 text-sm font-mono text-gray-600">${appId}</div>
+            
+            <a href="#" class="edit-button">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M3.75 2.5c-.69 0-1.25.56-1.25 1.25v8.5c0 .69.56 1.25 1.25 1.25h8.5c.69 0 1.25-.56 1.25-1.25V8.694a.75.75 0 0 1 1.5 0v3.556A2.75 2.75 0 0 1 12.25 15h-8.5A2.75 2.75 0 0 1 1 12.25v-8.5A2.75 2.75 0 0 1 3.75 1h3.556a.75.75 0 1 1 0 1.5H3.75Z"/>
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M13.739 1.178a1.75 1.75 0 0 0-2.478.002l-6.05 6.073a.75.75 0 0 0-.2.361l-.742 3.217a.75.75 0 0 0 .9.9l3.217-.743a.75.75 0 0 0 .363-.201l6.053-6.076a1.75 1.75 0 0 0-.003-2.472l-1.06-1.06ZM12.323 2.24a.25.25 0 0 1 .354 0l1.06 1.06a.25.25 0 0 1 0 .354l-.745.749-1.415-1.415.746-.748ZM10.52 4.05 6.425 8.16 6.001 10l1.837-.425 4.096-4.11L10.52 4.05Z"/>
+              </svg>
+              Update information
+            </a>
+            
+            <div class="dev-notice">
+              Billing information editing is disabled in development mode. This feature will work when your app is published.
+            </div>
+          </div>
+          
+          <!-- Invoice History Section -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">Invoice history</div>
+              <div>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="#6b7280">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M7.883 9.085a5 5 0 1 1 1.202-1.202l2.666 2.666a.847.847 0 0 1 0 1.202.847.847 0 0 1-1.202 0L7.883 9.085ZM8.3 5a3.3 3.3 0 1 1-6.6 0 3.3 3.3 0 0 1 6.6 0Z"/>
+                </svg>
+              </div>
+            </div>
+            
+            ${subscriptionDate && planAmount ? `
+              <div class="invoice-item">
+                <div class="invoice-left">
+                  <div class="invoice-status"></div>
+                  <div>
+                    <div class="invoice-date">${subscriptionDate}</div>
+                    <div class="invoice-desc">${planInterval ? `${planInterval.charAt(0).toUpperCase() + planInterval.slice(1)}ly` : ''} subscription</div>
+                  </div>
                 </div>
-                <div>
-                  <label class="text-xs font-medium text-gray-700 uppercase tracking-wide">Environment</label>
-                  <div class="mt-1 text-sm text-gray-600">Development</div>
+                <div class="invoice-right">
+                  <div class="invoice-amount">${formatPrice(planAmount, planCurrency)}</div>
+                  <a href="#" class="invoice-download">Download</a>
                 </div>
               </div>
+            ` : `
+              <div style="text-align: center; padding: 32px; color: #6b7280;">
+                No invoices available
+              </div>
+            `}
+            
+            <div class="dev-notice">
+              Invoice downloads are disabled in development mode.
             </div>
           </div>
         </div>
       </div>
 
       <!-- Cancel Subscription Modal -->
-      <div id="cancelModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg max-w-md w-full mx-4 p-6">
-          <div class="flex items-center space-x-3 mb-4">
-            <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-              </svg>
-            </div>
-            <h3 class="text-lg font-medium text-gray-900">Cancel subscription</h3>
+      <div id="cancelModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div class="modal-title">Cancel subscription</div>
+            <button onclick="hideCancelModal()" class="close-button">×</button>
           </div>
-          
-          <p class="text-sm text-gray-600 mb-6">
-            Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period.
-          </p>
-          
-          <div class="flex space-x-3">
-            <button onclick="hideCancelModal()" class="flex-1 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
-              Keep subscription
-            </button>
-            <button onclick="cancelSubscription()" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700">
-              Cancel subscription
-            </button>
+          <div class="modal-body">
+            <p>Are you sure you want to cancel your subscription? You'll lose access to premium features at the end of your current billing period.</p>
+          </div>
+          <div class="modal-footer">
+            <button onclick="hideCancelModal()" class="btn btn-secondary">Keep subscription</button>
+            <button onclick="cancelSubscription()" class="btn btn-danger">Cancel subscription</button>
           </div>
         </div>
       </div>
 
       <!-- Upgrade Plan Modal -->
-      <div id="upgradeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg max-w-lg w-full mx-4 p-6">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-medium text-gray-900">Change subscription plan</h3>
-            <button onclick="hideUpgradeModal()" class="text-gray-400 hover:text-gray-600">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
+      <div id="upgradeModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div class="modal-title">Change subscription plan</div>
+            <button onclick="hideUpgradeModal()" class="close-button">×</button>
           </div>
-          
-          <div class="space-y-4">
+          <div class="modal-body">
             ${currentPlan ? `
-              <div class="border border-blue-200 bg-blue-50 rounded-lg p-4">
-                <div class="flex items-center justify-between">
+              <div class="plan-option current-plan">
+                <div class="plan-option-header">
                   <div>
-                    <h4 class="font-medium text-gray-900">${planName}</h4>
-                    <p class="text-sm text-gray-600">Current plan</p>
+                    <div class="plan-option-name">${planName}</div>
+                    <div class="current-plan-label">Current plan</div>
                   </div>
-                  <div class="text-right">
-                    ${planAmount ? `
-                      <div class="font-medium text-gray-900">${formatPrice(planAmount, planCurrency)}</div>
-                      ${planInterval ? `<div class="text-sm text-gray-500">per ${planInterval}</div>` : ''}
-                    ` : `
-                      <div class="font-medium text-gray-900">Active</div>
-                    `}
-                  </div>
+                  <div class="plan-option-price">${planAmount ? formatPrice(planAmount, planCurrency) : 'Active'}</div>
                 </div>
               </div>
             ` : ''}
             
             ${otherPlans.map(plan => `
-              <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 cursor-pointer transition-colors" 
-                   onclick="selectPlan('${plan.id}')">
-                <div class="flex items-center justify-between">
+              <div class="plan-option" onclick="selectPlan('${plan.id}')">
+                <div class="plan-option-header">
                   <div>
-                    <h4 class="font-medium text-gray-900">${plan.product_info?.name || plan.nickname || 'Plan'}</h4>
-                    <p class="text-sm text-gray-600">${plan.product_info?.description || 'Subscription plan'}</p>
+                    <div class="plan-option-name">${plan.product_info?.name || plan.nickname || 'Plan'}</div>
+                    <div class="plan-option-desc">${plan.product_info?.description || 'Subscription plan'}</div>
                   </div>
-                  <div class="text-right">
-                    <div class="font-medium text-gray-900">${formatPrice(plan.unit_amount || 0, plan.currency)}</div>
-                    ${plan.recurring?.interval ? `<div class="text-sm text-gray-500">per ${plan.recurring.interval}</div>` : ''}
-                  </div>
+                  <div class="plan-option-price">${formatPrice(plan.unit_amount || 0, plan.currency)}</div>
                 </div>
               </div>
             `).join('')}
             
             ${otherPlans.length === 0 ? `
-              <div class="text-center py-8">
-                <div class="text-sm text-gray-500">No other plans available</div>
+              <div style="text-align: center; padding: 32px; color: #6b7280;">
+                No other plans available
               </div>
             ` : ''}
-          </div>
-          
-          <div class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div class="text-sm text-yellow-700">
+            
+            <div class="dev-notice">
               Plan changes are simulated in development mode and won't affect real billing.
             </div>
           </div>
-          
-          <div class="flex space-x-3 mt-6">
-            <button onclick="hideUpgradeModal()" class="flex-1 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
-              Cancel
-            </button>
-            <button id="confirmUpgradeBtn" onclick="confirmUpgrade()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700" disabled>
-              Select a plan first
-            </button>
+          <div class="modal-footer">
+            <button onclick="hideUpgradeModal()" class="btn btn-secondary">Cancel</button>
+            <button id="confirmUpgradeBtn" onclick="confirmUpgrade()" class="btn btn-primary" disabled>Select a plan first</button>
           </div>
         </div>
       </div>
+
+      <script>
+        let selectedPlanId = null;
+
+        function showCancelModal() {
+          document.getElementById('cancelModal').classList.add('show');
+        }
+
+        function hideCancelModal() {
+          document.getElementById('cancelModal').classList.remove('show');
+        }
+
+        function showUpgradeModal() {
+          document.getElementById('upgradeModal').classList.add('show');
+          selectedPlanId = null;
+          updateUpgradeButton();
+        }
+
+        function hideUpgradeModal() {
+          document.getElementById('upgradeModal').classList.remove('show');
+          selectedPlanId = null;
+        }
+
+        function selectPlan(planId) {
+          // Remove previous selection
+          document.querySelectorAll('.plan-option:not(.current-plan)').forEach(el => {
+            el.classList.remove('selected');
+          });
+          
+          // Add selection to clicked plan
+          event.currentTarget.classList.add('selected');
+          
+          selectedPlanId = planId;
+          updateUpgradeButton();
+        }
+
+        function updateUpgradeButton() {
+          const btn = document.getElementById('confirmUpgradeBtn');
+          if (selectedPlanId) {
+            btn.disabled = false;
+            btn.textContent = 'Change to selected plan';
+          } else {
+            btn.disabled = true;
+            btn.textContent = 'Select a plan first';
+          }
+        }
+
+        async function cancelSubscription() {
+          const button = event.target;
+          const originalText = button.textContent;
+          
+          try {
+            button.disabled = true;
+            button.textContent = 'Canceling...';
+            
+            const response = await fetch(\`/apps/${appId}/stripe/simulate/cancel\`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include'
+            });
+            
+            if (!response.ok) {
+              throw new Error('Cancellation failed');
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              button.textContent = '✓ Canceled';
+              button.style.backgroundColor = '#10b981';
+              
+              console.log('Cancellation successful, redirecting to app in 1000ms');
+              console.log('Cookie should now be set to canceled status');
+              
+              setTimeout(() => {
+                // Get the return URL from the query parameters or use referrer
+                const urlParams = new URLSearchParams(window.location.search);
+                let returnUrl = urlParams.get('returnUrl');
+                
+                if (!returnUrl) {
+                  const referrer = document.referrer;
+                  if (referrer) {
+                    const referrerUrl = new URL(referrer);
+                    returnUrl = referrerUrl.origin + '/preview/';
+                  } else {
+                    // Fallback based on current domain
+                    if (window.location.hostname === 'localhost') {
+                      returnUrl = 'http://localhost:3100/preview/';
+                    } else if (window.location.hostname.includes('fly.dev')) {
+                      returnUrl = \`https://manifest-app-\${appId}.fly.dev/preview/\`;
+                    } else {
+                      returnUrl = \`https://\${appId}.sites.madewithmanifest.com/\`;
+                    }
+                  }
+                }
+                
+                // Add cache-busting parameter to force refresh
+                const separator = returnUrl.includes('?') ? '&' : '?';
+                returnUrl += \`\${separator}billing_refresh=\${Date.now()}\`;
+                
+                window.location.href = returnUrl;
+              }, 1000);
+            }
+            
+          } catch (error) {
+            console.error('Cancellation error:', error);
+            button.disabled = false;
+            button.textContent = originalText;
+            alert('Cancellation failed. Please try again.');
+          }
+        }
+
+        async function confirmUpgrade() {
+          if (!selectedPlanId) return;
+          
+          const button = event.target;
+          const originalText = button.textContent;
+          
+          try {
+            button.disabled = true;
+            button.textContent = 'Upgrading...';
+            
+            const response = await fetch(\`/apps/${appId}/stripe/simulate/upgrade\`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+              body: JSON.stringify({ newPriceId: selectedPlanId })
+            });
+            
+            if (!response.ok) {
+              throw new Error('Upgrade failed');
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              button.textContent = '✓ Plan Changed';
+              button.style.backgroundColor = '#10b981';
+              
+              setTimeout(() => {
+                hideUpgradeModal();
+                window.location.reload();
+              }, 1000);
+            }
+            
+          } catch (error) {
+            console.error('Upgrade error:', error);
+            button.disabled = false;
+            button.textContent = originalText;
+            alert('Plan change failed. Please try again.');
+          }
+        }
+
+        async function reactivateSubscription() {
+          const button = event.target;
+          const originalText = button.textContent;
+          
+          try {
+            button.disabled = true;
+            button.textContent = 'Reactivating...';
+            
+            const response = await fetch(\`/apps/${appId}/stripe/simulate/reactivate\`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include'
+            });
+            
+            if (!response.ok) {
+              throw new Error('Reactivation failed');
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+              button.textContent = '✓ Reactivated';
+              button.style.backgroundColor = '#10b981';
+              
+              setTimeout(() => {
+                window.location.reload();
+              }, 1000);
+            }
+            
+          } catch (error) {
+            console.error('Reactivation error:', error);
+            button.disabled = false;
+            button.textContent = originalText;
+            alert('Reactivation failed. Please try again.');
+          }
+        }
+
+        // Close modals when clicking outside
+        document.addEventListener('click', function(e) {
+          if (e.target.classList.contains('modal')) {
+            e.target.classList.remove('show');
+          }
+        });
+      </script>
+              </svg>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+
 
       <script>
         let selectedPlanId = null;
