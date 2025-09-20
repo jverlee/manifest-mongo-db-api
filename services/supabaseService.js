@@ -118,6 +118,30 @@ class SupabaseService {
       throw error;
     }
   }
+
+  async getActiveSubscription(appId, appUserId) {
+    try {
+      const { data, error } = await this.client
+        .from('app_user_subscriptions')
+        .select('*')
+        .eq('app_id', appId)
+        .eq('app_user_id', appUserId)
+        .in('status', ['active', 'trialing'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error fetching active subscription:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getActiveSubscription:', error);
+      return null;
+    }
+  }
 }
 
 module.exports = new SupabaseService();

@@ -20,8 +20,20 @@ router.get('/stripe/checkout/prices/:priceId', sessionService.attachUserFromSess
     const { appId, priceId } = req.params;
 
     // successUrl from query params
-    const successUrl = req.query.successUrl;
+    let successUrl = req.query.successUrl;
     const cancelUrl = req.query.cancelUrl;
+    
+    // Default success URL based on environment
+    if (!successUrl) {
+      const environment = detectEnvironment(req);
+      if (environment === 'local') {
+        successUrl = 'http://localhost:3100/preview/';
+      } else if (environment === 'editing') {
+        successUrl = `https://manifest-app-${appId}.fly.dev/preview/`;
+      } else {
+        successUrl = `https://${appId}.sites.madewithmanifest.com/`;
+      }
+    }
     
     // Get Stripe account details from Supabase
     const stripeAccount = await supabaseService.getStripeAccount(appId);
@@ -170,6 +182,127 @@ router.get('/stripe/checkout/prices/:priceId/simulate', sessionService.attachUse
   }
 });
 
+// POST /apps/:appId/stripe/simulate/subscribe - Simulate subscription in non-production environments
+router.post('/stripe/simulate/subscribe', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
+  try {
+    const { appId } = req.params;
+    const { priceId } = req.body;
+    
+    // Only allow in non-production environments
+    const environment = detectEnvironment(req);
+    if (environment === 'production') {
+      return res.status(403).json(errorResponse(
+        'Forbidden',
+        'Simulation endpoints are not available in production',
+        403
+      ));
+    }
+    
+    if (!priceId) {
+      return res.status(400).json(errorResponse(
+        'Invalid request',
+        'priceId is required',
+        400
+      ));
+    }
+    
+    // Store simulation data in a secure cookie
+    const simulationData = {
+      status: 'current',
+      priceId: priceId,
+      subscribedAt: new Date().toISOString(),
+      appId: appId,
+      appUserId: req.auth.appUserId
+    };
+    
+    // Set simulation cookie (expires in 30 days)
+    const cookieName = `sim_billing_${appId}`;
+    res.cookie(cookieName, JSON.stringify(simulationData), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: `/apps/${appId}`
+    });
+    
+    res.json({
+      success: true,
+      simulation: {
+        billingStatus: 'current',
+        priceId: priceId,
+        message: 'Simulation subscription created successfully'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error creating simulation subscription:', error);
+    res.status(500).json(errorResponse(error, 'Failed to create simulation subscription'));
+  }
+});
+
+// POST /apps/:appId/stripe/simulate/restore - Restore simulation from localStorage after login
+router.post('/stripe/simulate/restore', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
+  try {
+    const { appId } = req.params;
+    const { simulationData } = req.body;
+    
+    // Only allow in non-production environments
+    const environment = detectEnvironment(req);
+    if (environment === 'production') {
+      return res.status(403).json(errorResponse(
+        'Forbidden',
+        'Simulation endpoints are not available in production',
+        403
+      ));
+    }
+    
+    if (!simulationData || !simulationData.priceId) {
+      return res.status(400).json(errorResponse(
+        'Invalid request',
+        'simulationData with priceId is required',
+        400
+      ));
+    }
+    
+    // Verify the simulation data is for the current app
+    if (simulationData.appId !== appId) {
+      return res.status(400).json(errorResponse(
+        'Invalid request',
+        'Simulation data does not match current app',
+        400
+      ));
+    }
+    
+    // Restore simulation data in cookie
+    const restoredData = {
+      status: simulationData.billingStatus || 'current',
+      priceId: simulationData.priceId,
+      subscribedAt: simulationData.timestamp || new Date().toISOString(),
+      appId: appId,
+      appUserId: req.auth.appUserId,
+      restored: true
+    };
+    
+    // Set simulation cookie
+    const cookieName = `sim_billing_${appId}`;
+    res.cookie(cookieName, JSON.stringify(restoredData), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: `/apps/${appId}`
+    });
+    
+    res.json({
+      success: true,
+      message: 'Simulation restored successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error restoring simulation:', error);
+    res.status(500).json(errorResponse(error, 'Failed to restore simulation'));
+  }
+});
 
 // GET /apps/:appId/stripe/portal - Create customer portal session
 router.get('/stripe/portal', sessionService.attachUserFromSession, requireAuth, async (req, res) => {
@@ -404,16 +537,43 @@ router.get('/me', sessionService.attachUserFromSession, requireAuth, async (req,
     // lookup user from app_users where app_id = appId and app_user_id = appUserId
     const user = await supabaseService.getAppUser(appId, appUserId);
 
-    res.json(
-      {
-        appId: appId,
-        appUserId: appUserId,
-        billingStatus: user.billing_status,
-        displayName: user.display_name,
-        email: user.primary_email
+    // Check environment for simulation data
+    const environment = detectEnvironment(req);
+    let billingStatus = user.billing_status;
+    let currentPriceId = null;
+    let isSimulation = false;
+    
+    // Check for simulation data in non-production environments
+    const cookieName = `sim_billing_${appId}`;
+    const simulationCookie = req.cookies[cookieName];
+    
+    if (environment !== 'production' && simulationCookie) {
+      try {
+        const simulationData = JSON.parse(simulationCookie);
+        // Verify simulation is for current app and user
+        if (simulationData.appId === appId && simulationData.appUserId === appUserId) {
+          billingStatus = simulationData.status;
+          currentPriceId = simulationData.priceId;
+          isSimulation = true;
+        }
+      } catch (e) {
+        console.error('Error parsing simulation cookie:', e);
       }
-    )
+    } else if (billingStatus === 'current') {
+      // In production or no simulation, fetch real subscription if billing is current
+      const activeSubscription = await supabaseService.getActiveSubscription(appId, appUserId);
+      currentPriceId = activeSubscription?.plan_price_id || null;
+    }
 
+    res.json({
+      appId: appId,
+      appUserId: appUserId,
+      billingStatus: billingStatus,
+      displayName: user.display_name,
+      email: user.primary_email,
+      currentPriceId: currentPriceId,
+      isSimulation: isSimulation
+    });
 
   } catch (error) {
     console.error('Error fetching user info:', error);

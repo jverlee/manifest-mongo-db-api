@@ -236,13 +236,83 @@ function getCheckoutSimulationHTML(appId, priceId, priceInfo = {}) {
       </div>
 
       <script>
-        function handleCheckout() {
-          // Get the success URL from the original checkout params
-          const urlParams = new URLSearchParams(window.location.search);
-          const successUrl = urlParams.get('successUrl') || 'https://app.madewithmanifest.com/';
+        async function handleCheckout() {
+          const button = event.target;
+          const originalText = button.textContent;
           
-          // Simulate successful checkout by redirecting to success URL
-          window.location.href = successUrl;
+          try {
+            // Disable button and show loading state
+            button.disabled = true;
+            button.textContent = 'Processing...';
+            button.style.opacity = '0.7';
+            
+            // Get parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            let successUrl = urlParams.get('successUrl');
+            const appId = '${appId}';
+            const priceId = '${priceId}';
+            
+            // If no successUrl provided, use the referring domain's preview path
+            if (!successUrl) {
+              const referrer = document.referrer;
+              if (referrer) {
+                const referrerUrl = new URL(referrer);
+                successUrl = referrerUrl.origin + '/preview/';
+              } else {
+                // Fallback based on current domain
+                if (window.location.hostname === 'localhost') {
+                  successUrl = 'http://localhost:3100/preview/';
+                } else if (window.location.hostname.includes('fly.dev')) {
+                  successUrl = \`https://manifest-app-\${appId}.fly.dev/preview/\`;
+                } else {
+                  successUrl = \`https://\${appId}.sites.madewithmanifest.com/\`;
+                }
+              }
+            }
+            
+            // Call simulation endpoint
+            const response = await fetch(\`/apps/\${appId}/stripe/simulate/subscribe\`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include', // Important for session cookies
+              body: JSON.stringify({ priceId })
+            });
+            
+            if (!response.ok) {
+              throw new Error('Simulation failed');
+            }
+            
+            const result = await response.json();
+            
+            // Store simulation info in localStorage for restoration after login
+            if (result.success) {
+              const simulationData = {
+                appId: appId,
+                priceId: priceId,
+                timestamp: new Date().toISOString(),
+                billingStatus: 'current'
+              };
+              localStorage.setItem(\`manifest_simulation_\${appId}\`, JSON.stringify(simulationData));
+              
+              // Show success briefly then redirect
+              button.textContent = '✓ Success!';
+              button.style.backgroundColor = '#10b981';
+              
+              setTimeout(() => {
+                window.location.href = successUrl;
+              }, 500);
+            }
+            
+          } catch (error) {
+            console.error('Simulation error:', error);
+            // Reset button on error
+            button.disabled = false;
+            button.textContent = originalText;
+            button.style.opacity = '1';
+            alert('Simulation failed. Please try again.');
+          }
         }
       </script>
     </body>
